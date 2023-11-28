@@ -1,0 +1,60 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>com.supasulley</groupId>
+	<artifactId>weeve</artifactId>
+	<version>1.0.0-SNAPSHOT</version>
+	<packaging>jar</packaging>
+
+	<name>weeve</name>
+	<url>http://maven.apache.org</url>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	</properties>
+
+	<repositories>
+		<repository>
+			<id>dv8tion</id>
+			<name>m2-dv8tion</name>
+			<url>https://m2.dv8tion.net/releases</url>
+		</repository>
+		<repository>
+			<id>jitpack.io</id>
+			<url>https://jitpack.io</url>
+		</repository>
+	</repositories>
+
+	<dependencies>
+		<!-- JDA -->
+		<dependency>
+			<groupId>net.dv8tion</groupId>
+			<artifactId>JDA</artifactId>
+			<version>5.0.0-beta.18</version>
+		</dependency>
+		<!-- SLF4J -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>1.7.25</version>
+		</dependency>
+		<!-- Working Lavaplayer that retries YouTube tracks when 403s are encountered -->
+		<dependency>
+			<groupId>com.github.Demeng7215</groupId>
+			<artifactId>lavaplayer-403retry</artifactId>
+			<version>1.3.77-fix2</version>
+		</dependency>
+		<!-- Lavaplayer Raspberry PI natives-->
+		<!--<dependency>
+			<groupId>com.github.aikaterna</groupId>
+			<artifactId>lavaplayer-natives</artifactId>
+			<version>0051ce9</version>
+		</dependency> -->
+		<!-- Dropbox SDK for updating -->
+		<dependency>
+			<groupId>com.dropbox.core</groupId>
+			<artifactId>dropbox-core-sdk</artifactId>
+			<version>5.2.0</version>
+		</dependency>
+	</dependencies>
+</project>
