@@ -8,7 +8,7 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 - [ ] Offers free hosting
 - [ ] Scalable
 
-**weeve is an engine, not a bot**. Make one and run it through weeve which takes care of the rest, no coding required.
+**weeve is an engine, not a bot**. You make one and weeve runs it, no coding required.
 
 # Setup
 >[!NOTE]
@@ -63,22 +63,19 @@ No. weeve connects to the Discord API to run your bot without contacting any thi
 
 # Run options
 ### 1. Receive a DM when online
-You can add ```owner_id``` to *tokens.json* to be DM'd when the bot goes online. This way, you are notified if the bot had downtime, lost power, or had to restart.
->To find your owner ID, enable Developer Mode in the Discord advanced settings, then click on your profile to reveal "Copy User ID." Example:
+You can add ```owner_id``` to *tokens.json* to be DM'd when the bot goes online. This way, you are notified if the bot has downtime, lost power, or had to restart.
+> [!TIP]
+> To find your owner ID, enable Developer Mode in the Discord advanced settings, then click on your profile to reveal *Copy User ID*.
 ```json
 {"token": "your_bot_token", "owner_id": "your_owner_id"}
 ```
-*You'll need to add your bot to a server you're in before you're able to receive DMs.*
+*You'll need to add your bot to a server you're in before you're able to receive DMs. You can clear DMs with /clean-up.*
 
 ### 2. Point to an external tokens file
-Point to an external file outside the running directory using `--file` as a command line argument. Example:
-
-`java -jar weeve.jar --file=/path/to/tokens`
+Point to an external file outside the running directory using `--file` as a command line argument: `java -jar weeve.jar --file=/path/to/tokens`
 
 ### 3. Run without tokens.json
-Use command line arguments to avoid using a tokens file. Example:
-
-`java -jar weeve.jar --token=your_bot_token --owner_id=your_owner_id`
+Use command line arguments to avoid using a tokens file: `java -jar weeve.jar --token=your_bot_token --owner_id=your_owner_id`
 
 # Engine
 weeve runs on Java 17 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It also uses a [fork of LavaPlayer](https://github.com/Demeng7215/lavaplayer-403retry/tree/master) by [Demeng7215](https://github.com/Demeng7215) that retries the track after a 403 YouTube error. weeve is intentionally not built to scale (no sharding) because you cannot verify a bot that violates the Discord terms of service. I have not tested weeve's performance when handling playback for many servers simultaneously.
