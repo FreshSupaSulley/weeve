@@ -17,7 +17,7 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 weeve runs on Java 11, which should be backward compatible with newer versions. Make sure you have Java installed by running ```java -version```.
 
 1. [Create a new Discord bot](#q-i-dont-know-how-to-make-a-discord-bot).
-2. Download the [latest release](https://github.com/FreshSupaSulley/weeve/releases/latest/download/weeve.jar) of *weeve.jar*. Move it into a new folder.
+2. Download the [latest release](https://github.com/FreshSupaSulley/weeve/releases/latest) of *weeve.jar*. Move it into a new folder.
 3. Create a *tokens.json* file inside the folder to hold your Discord bot's generated token, like this:
    ```json
    {"token": "your_bot_token"}
