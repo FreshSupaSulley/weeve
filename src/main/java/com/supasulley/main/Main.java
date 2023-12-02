@@ -9,6 +9,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -27,11 +31,37 @@ import net.dv8tion.jda.internal.JDAImpl;
 
 public class Main {
 	
+	public static final Logger log = (Logger) LoggerFactory.getLogger(Main.class);
+	
 	public static final String ERROR_MESSAGE = "[**INTERNAL ERROR**] An unknown error has occured. Try again later.";
 	public static String BOT_NAME, BOT_ID;
 	
 	/** True to use the test bot, false for production */
 	private static boolean TEST_BOT = false;
+	
+	// Error handling when --notify_errors is enabled
+	private static final int MAX_CONSECUTIVE_ERRORS = 10;
+	private static final int CONSECUTIVE_INTERVAL = 1000;
+	private static final int DECREASE_RATE = CONSECUTIVE_INTERVAL * 100;
+	
+	private long lastError = System.currentTimeMillis();
+	private int consecutiveErrors;
+	
+	static
+	{
+		// If running from jar, do not use test bot
+		String resource = Main.class.getResource("Main.class").toString();
+		if(resource.startsWith("jar:") || resource.startsWith("rsrc:"))
+			TEST_BOT = false;
+		
+		// Print uncaught exceptions to the logs instead of the console
+		Thread.setDefaultUncaughtExceptionHandler((thread, throwable) ->
+		{
+			log.error(thread.getName(), throwable);
+		});
+		
+		log.info("PROGRAM START at " + System.currentTimeMillis());
+	}
 	
 	/**
 	 * Initializes the bot.
@@ -39,12 +69,12 @@ public class Main {
 	 * @param testBotToken test bot token, entirely for development purposes. Can be null when not used
 	 * @param ownerID Discord user ID, used for notifying when online (and allows forks to make custom admin commands). Can be null
 	 */
-	public Main(String botToken, String testBotToken, String ownerID)
+	public Main(String botToken, String testBotToken, String ownerID, boolean notifyErrors)
 	{
-		// If running from jar, do not use test bot
-		String resource = Main.class.getResource("Main.class").toString();
-		if(resource.startsWith("jar:") || resource.startsWith("rsrc:"))
-			TEST_BOT = false;
+		if(notifyErrors && ownerID == null)
+		{
+			throw new IllegalStateException("notify_errors enabled, but no owner_id provided.");
+		}
 		
 		if(TEST_BOT)
 		{
@@ -101,13 +131,65 @@ public class Main {
 			{
 				// Notify of successful launch
 				PrivateChannel privateChannel = jda.retrieveUserById(ownerID).complete().openPrivateChannel().complete();
-				privateChannel.sendMessage(Main.BOT_NAME + " is online (attempts == **" + attempts + "**) running Java " + System.getProperty("java.version")).complete();
+				
+				// If DM wasn't successful (hold the program until finished)
+				if(!sendDM(privateChannel, Main.BOT_NAME + " is online (attempts == **" + attempts + "**) running Java " + System.getProperty("java.version")).get())
+				{
+					System.err.println("Can't send messages to the owner yet. You need to interact with the bot first. This is a non-fatal error.");
+				}
+				
+				if(notifyErrors)
+				{
+					sendDM(privateChannel, "You have enabled notify_errors. You will receive summaries of any errors here, and full details will be reported in the logs created in the running directory");
+					
+					// Savior function that catches important errors
+					Thread.setDefaultUncaughtExceptionHandler((thread, throwable) ->
+					{
+						log.error(thread.getName(), throwable);
+						
+						// Get time between errors
+						long current = System.currentTimeMillis();
+						long distance = current - lastError;
+						
+						// If this error occurred too soon after the last
+						if(distance < CONSECUTIVE_INTERVAL)
+						{
+							// If the consecutive errors have reached the maximum allowed
+							if(++consecutiveErrors == MAX_CONSECUTIVE_ERRORS)
+							{
+								// Warn the owner that something is definitely wrong
+								sendDM(privateChannel, "Something is very wrong with " + Main.BOT_NAME + ". Open an issue with your logs file attached in the weeve repo if severe.");
+							}
+						}
+						// If we haven't had an error in a while
+						else
+						{
+							// 100 seconds needs to pass to decrease consecutive errors by 1
+							consecutiveErrors -= Math.max(0, (int) (distance / DECREASE_RATE));
+						}
+						
+						// Only DM the user if we're under the max
+						if(consecutiveErrors < MAX_CONSECUTIVE_ERRORS)
+						{
+							sendDM(privateChannel, "**Error** (" + consecutiveErrors + "/" + MAX_CONSECUTIVE_ERRORS + " consecutive) - " + throwable.getMessage());
+							lastError = System.currentTimeMillis();
+						}
+					});
+				}
 			}
 		} catch(Throwable t) {
 			System.err.println("An error occured initializing InputListener");
 			t.printStackTrace();
 			System.exit(1);
 		}
+	}
+	
+	private CompletableFuture<Boolean> sendDM(PrivateChannel channel, String text)
+	{
+		return channel.sendMessage(text).submit().handleAsync((message, throwable) ->
+		{
+			return throwable == null;
+		});
 	}
 	
 	/**
@@ -163,18 +245,25 @@ public class Main {
 	{
 		Map<String, String> map = new HashMap<String, String>();
 		
-		for(int i = 0; i < args.length; i++)
+		for(String arg : args)
 		{
-			String arg = args[i];
+			String[] split = arg.split("=");
 			
-			for(String name : names)
+			// If there is an equals sign
+			if(split.length > 1)
 			{
-				String[] split = arg.split("=");
-				
-				if(arg.startsWith(name) && split.length == 2)
+				for(String name : names)
 				{
-					map.put(split[0], split[1]);
+					if(arg.startsWith(name))
+					{
+						map.put(split[0], split[1]);
+					}
 				}
+			}
+			// Otherwise, it's a flag
+			else
+			{
+				map.put(arg, "true");
 			}
 		}
 		
@@ -183,7 +272,8 @@ public class Main {
 	
 	public static void main(String[] args)
 	{
-		String[] names = {"--token", "--test_token", "--owner_id", "--file"};
+		// Read command line arguments
+		String[] names = {"--token", "--test_token", "--owner_id", "--notify_errors", "--file"};
 		Map<String, String> argsMap = getArgs(args, names);
 		
 		File file = new File(argsMap.computeIfAbsent("--file", key -> "tokens.json"));
@@ -227,6 +317,6 @@ public class Main {
 			return;
 		}
 		
-		new Main(argsMap.get("--token"), argsMap.get("--test_token"), argsMap.get("--owner_id"));
+		new Main(argsMap.get("--token"), argsMap.get("--test_token"), argsMap.get("--owner_id"), Boolean.parseBoolean(argsMap.get("--notify_errors")));
 	}
 }

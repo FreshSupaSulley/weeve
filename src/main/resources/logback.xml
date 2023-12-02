@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<timestamp key="time" datePattern="MM-dd-yyyy" />
+	<property name="logPath" value="./logs" />
+	<property name="printFormat"
+		value="%p %d{MM/dd HH:mm:ss.SSS} [%c] --- %m%n" />
+
+	<appender name="console"
+		class="ch.qos.logback.core.ConsoleAppender">
+		<!-- Deny logs with levels below DEBUG -->
+		<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+			<level>INFO</level>
+		</filter>
+		<encoder>
+			<pattern>${printFormat}</pattern>
+		</encoder>
+	</appender>
+
+	<appender name="logs" class="ch.qos.logback.core.FileAppender">
+		<file>${logPath}/${time}.log</file>
+		<append>true</append>
+		<encoder>
+			<Pattern>${printFormat}</Pattern>
+		</encoder>
+	</appender>
+	
+	<root level="all">
+		<appender-ref ref="console" />
+	</root>
+
+	<logger name="com.supasulley.main.Main" level="all">
+		<appender-ref ref="logs" />
+	</logger>
+
+	<!-- JDA logger -->
+	<logger name="net.dv8tion" level="info">
+		<appender-ref ref="logs" />
+	</logger>
+</configuration>
