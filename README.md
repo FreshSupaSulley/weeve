@@ -14,7 +14,7 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 >[!NOTE]
 >This requires basic knowledge of running jars and using the command line.
 
-weeve runs on Java. Make sure you have Java installed (at least [JDK 17](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)). Check by running ```java -version``` in the command line.
+weeve runs on Java 11, which should be backward compatible with newer versions. Make sure you have Java installed by running ```java -version```.
 
 1. [Create a new Discord bot](#q-i-dont-know-how-to-make-a-discord-bot).
 2. Download the [latest release](https://github.com/FreshSupaSulley/weeve/releases/latest/download/weeve.jar) of *weeve.jar*. Move it into a new folder.
@@ -27,7 +27,7 @@ weeve runs on Java. Make sure you have Java installed (at least [JDK 17](https:/
    cd /path/to/folder
    java -jar weeve.jar
    ```
-   weeve will read the *tokens.json* file present in the working directory and use it to run your bot. Allow a few minutes before restarting Discord for the slash commands to appear.
+   weeve will read the *tokens.json* file in the working directory and use it to run your bot. Allow a few minutes before restarting Discord for the slash commands to appear.
 
 # Commands
 | Name | Description |
@@ -77,8 +77,11 @@ Point to an external file outside the running directory using `--file` as a comm
 ### 3. Run without tokens.json
 Use command line arguments to avoid using a tokens file: `java -jar weeve.jar --token=your_bot_token --owner_id=your_owner_id`
 
+### 4. Error handling
+Setting `notify_errors` in *tokens.json* to `true` or as a command line argument (`--notify_errors`) will allow the user at the `owner_id` to receive notifications if errors occur. Detailed logs are recorded in the running directory.
+
 # Engine
-weeve runs on Java 17 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It also uses a [fork of LavaPlayer](https://github.com/Demeng7215/lavaplayer-403retry/tree/master) by [Demeng7215](https://github.com/Demeng7215) that retries the track after a 403 YouTube error. weeve is intentionally not built to scale (no sharding) because you cannot verify a bot that violates the Discord terms of service. I have not tested weeve's performance when handling playback for many servers simultaneously.
+weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It uses a [fork of LavaPlayer](https://github.com/Demeng7215/lavaplayer-403retry/tree/master) by [Demeng7215](https://github.com/Demeng7215) that retries the track after a 403 YouTube error. weeve is intentionally not built to scale (no sharding) because you cannot verify a bot that violates the Discord terms of service. I have not tested weeve's performance when handling playback for many servers simultaneously.
 
 # Contributing
-Feel free to do whatever you want with this repository. If you find a bug, please open an issue or feel free to start a pull request.
+Feel free to do whatever you want with this repository. If you find a bug, please open an issue with the logs attached.
