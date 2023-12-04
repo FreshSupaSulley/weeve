@@ -18,6 +18,11 @@ public class AudioRequest {
 		this.requestOrigin = requestOrigin;
 	}
 	
+	public AudioChannel getAudioChannel()
+	{
+		return audioChannel;
+	}
+	
 	public AudioTrack getAudioTrack()
 	{
 		return track;

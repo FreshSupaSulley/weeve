@@ -11,6 +11,7 @@ import com.supasulley.music.GuildMusicManager;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.GuildVoiceState;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageHistory;
 import net.dv8tion.jda.api.entities.User;
@@ -230,8 +231,7 @@ public class InputListener extends ListenerAdapter {
 		{
 			AudioChannel joined = event.getChannelJoined();
 			
-			// If bot left (appears to be called when someone moves the bot between voice channels)
-			// If we didn't move to another channel
+			// If we didn't move to another channel and were disconnected
 			if(joined == null)
 			{
 				audioHandler.getGuildAudioPlayer(guild).reset();
@@ -250,21 +250,21 @@ public class InputListener extends ListenerAdapter {
 		// If someone else left (we don't care if someone joined anything)
 		else if(event.getChannelLeft() != null)
 		{
-			AudioManager manager = guild.getAudioManager();
+			GuildMusicManager manager = audioHandler.getGuildAudioPlayer(guild);
 			
-			// Make sure we're in the same call
-			if(manager.isConnected())
+			if(manager.isPlaying())
 			{
-				AudioChannel channel = manager.getConnectedChannel();
-				
-				if(channel.getIdLong() == event.getChannelLeft().getIdLong())
+				AudioChannel audioChannel = manager.getCurrentRequest().getAudioChannel();
+				// If we are playing music in the same channel as the person who left
+				// This is better than using the AudioManager because it's apparently unreliable for async reasons
+				if(audioChannel.getIdLong() == event.getChannelLeft().getIdLong())
 				{
 					AudioRequest request = audioHandler.getGuildAudioPlayer(guild).getCurrentRequest();
 					
 					// If the bot left the call
 					if(checkCallStatus(event))
 					{
-						request.sendToOrigin("All users left " + channel.getName());
+						request.sendToOrigin("All users left " + audioChannel.getName());
 					}
 				}
 			}
@@ -279,16 +279,17 @@ public class InputListener extends ListenerAdapter {
 	private boolean checkCallStatus(GuildVoiceUpdateEvent event)
 	{
 		Guild guild = event.getGuild();
-		AudioManager manager = guild.getAudioManager();
+		GuildVoiceState state = guild.getSelfMember().getVoiceState();
 		
-		// If someone left the same channel the bot is in
-		if(manager.isConnected())
+		if(state.inAudioChannel())
 		{
+			AudioChannel channel = state.getChannel();
+			
 			// If the channel is now empty
-			if(manager.getConnectedChannel().getMembers().size() < 2)
+			if(channel.getMembers().size() < 2)
 			{
 				audioHandler.getGuildAudioPlayer(guild).reset();
-				manager.closeAudioConnection();
+				guild.getAudioManager().closeAudioConnection();
 				return true;
 			}
 		}
