@@ -1,12 +1,11 @@
 package com.supasulley.main;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.supasulley.music.AudioHandler;
+import com.supasulley.music.AudioRequest;
 import com.supasulley.music.GuildMusicManager;
 
 import net.dv8tion.jda.api.JDA;
@@ -15,7 +14,6 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageHistory;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.ExceptionEvent;
@@ -199,20 +197,21 @@ public class InputListener extends ListenerAdapter {
 				Message sample = messages.get(i);
 				if(sample.isPinned()) continue;
 				
-				if(sample.getAuthor().getId() == Main.BOT_ID)
+				if(sample.getAuthor().getId().equals(Main.BOT_ID))
 				{
-					long diff = ChronoUnit.DAYS.between(sample.getTimeCreated().toInstant(), Instant.now());
-					
-					if(!(channel instanceof TextChannel) || diff < 14)
-					{
-						toDelete.add(messages.get(i));
-					}
+					toDelete.add(messages.get(i));
 				}
 			}
 			
 			if(toDelete.size() > 1)
 			{
-				channel.purgeMessages(toDelete);
+				channel.purgeMessages(toDelete).forEach(future -> {
+					future.whenComplete((done, error) -> {
+						if(error != null) {
+							Main.log.error("Failed to delete message", error);
+						}
+					});
+				});
 			}
 			else if(toDelete.size() != 0)
 			{
@@ -226,22 +225,75 @@ public class InputListener extends ListenerAdapter {
 	{
 		Guild guild = event.getGuild();
 		
-		// If we have an active audio connection
-		if(guild.getAudioManager().isConnected())
+		// If this event has to do with the bot
+		if(event.getMember().getId().equals(Main.BOT_ID))
 		{
-			AudioChannel channel = event.getChannelLeft();
+			AudioChannel joined = event.getChannelJoined();
 			
-			// If someone left the same channel the bot is in
-			if(channel == guild.getAudioManager().getConnectedChannel())
+			// If bot left (appears to be called when someone moves the bot between voice channels)
+			// If we didn't move to another channel
+			if(joined == null)
 			{
-				// If the channel is now empty
-				if(channel.getMembers().size() < 2)
+				audioHandler.getGuildAudioPlayer(guild).reset();
+			}
+			else
+			{
+				AudioRequest request = audioHandler.getGuildAudioPlayer(guild).getCurrentRequest();
+				
+				// If the bot left the call
+				if(checkCallStatus(event))
 				{
-					audioHandler.getGuildAudioPlayer(guild).reset();
-					guild.getAudioManager().closeAudioConnection();
+					request.sendToOrigin(Main.BOT_NAME + " was moved to an empty call");
 				}
 			}
 		}
+		// If someone else left (we don't care if someone joined anything)
+		else if(event.getChannelLeft() != null)
+		{
+			AudioManager manager = guild.getAudioManager();
+			
+			// Make sure we're in the same call
+			if(manager.isConnected())
+			{
+				AudioChannel channel = manager.getConnectedChannel();
+				
+				if(channel.getIdLong() == event.getChannelLeft().getIdLong())
+				{
+					AudioRequest request = audioHandler.getGuildAudioPlayer(guild).getCurrentRequest();
+					
+					// If the bot left the call
+					if(checkCallStatus(event))
+					{
+						request.sendToOrigin("All users left " + channel.getName());
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Handles the bot's behavior if someone moved or disconnected it, or if a member left a channel.
+	 * @param event the event
+	 * @return true if the bot stopped playback, false otherwise
+	 */
+	private boolean checkCallStatus(GuildVoiceUpdateEvent event)
+	{
+		Guild guild = event.getGuild();
+		AudioManager manager = guild.getAudioManager();
+		
+		// If someone left the same channel the bot is in
+		if(manager.isConnected())
+		{
+			// If the channel is now empty
+			if(manager.getConnectedChannel().getMembers().size() < 2)
+			{
+				audioHandler.getGuildAudioPlayer(guild).reset();
+				manager.closeAudioConnection();
+				return true;
+			}
+		}
+		
+		return false;
 	}
 	
 	@Override

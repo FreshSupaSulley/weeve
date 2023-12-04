@@ -37,7 +37,7 @@ public class Main {
 	public static String BOT_NAME, BOT_ID;
 	
 	/** True to use the test bot, false for production */
-	private static boolean TEST_BOT = false;
+	private static boolean TEST_BOT = true;
 	
 	// Error handling when --notify_errors is enabled
 	private static final int MAX_CONSECUTIVE_ERRORS = 10;
@@ -69,26 +69,16 @@ public class Main {
 	 * @param testBotToken test bot token, entirely for development purposes. Can be null when not used
 	 * @param ownerID Discord user ID, used for notifying when online (and allows forks to make custom admin commands). Can be null
 	 */
-	public Main(String botToken, String testBotToken, String ownerID, boolean notifyErrors)
+	public Main(String botToken, String ownerID, boolean notifyErrors)
 	{
 		if(notifyErrors && ownerID == null)
 		{
 			throw new IllegalStateException("notify_errors enabled, but no owner_id provided.");
 		}
 		
-		if(TEST_BOT)
-		{
-			System.out.println("Using test bot token");
-			
-			if(testBotToken == null)
-			{
-				throw new IllegalStateException("Test bot token is null");
-			}
-		}
-		
 		// JDA will reconnect after a very long period of downtime (I tested up to 3-4 hours)
 		// JDA will immediately fail if you try to create the bot when the internet is unavailable
-		JDABuilder builder = JDABuilder.createDefault(TEST_BOT ? testBotToken : botToken).setAutoReconnect(true).setContextMap(null);
+		JDABuilder builder = JDABuilder.createDefault(botToken).setAutoReconnect(true).setContextMap(null);
 		JDA jda = null;
 		int attempts = 0;
 		
@@ -140,7 +130,7 @@ public class Main {
 				
 				if(notifyErrors)
 				{
-					sendDM(privateChannel, "You have enabled notify_errors. You will receive summaries of any errors here, and full details will be reported in the logs created in the running directory");
+					sendDM(privateChannel, "`notify_errors` enabled. Full details in the logs created in the running directory");
 					
 					// Savior function that catches important errors
 					Thread.setDefaultUncaughtExceptionHandler((thread, throwable) ->
@@ -158,7 +148,7 @@ public class Main {
 							if(++consecutiveErrors == MAX_CONSECUTIVE_ERRORS)
 							{
 								// Warn the owner that something is definitely wrong
-								sendDM(privateChannel, "Something is very wrong with " + Main.BOT_NAME + ". Open an issue with your logs file attached in the weeve repo if severe.");
+								sendDM(privateChannel, "Too many consecutive errors. Check logs.");
 							}
 						}
 						// If we haven't had an error in a while
@@ -294,7 +284,7 @@ public class Main {
 				}
 			}
 		} catch(FileNotFoundException e) {
-			// It's only an error if the file is required
+			// It's only an error if there wasn't a token provided in the command line either
 			if(!argsMap.containsKey("--token"))
 			{
 				System.err.println("Failed to find tokens file at " + file.getAbsolutePath() + ". Create one and paste your bot token as a JSON name value pair {\"token\": \"insert_token_here\"}. Alternatively, pass --token=insert_token_here as a program argument.");
@@ -310,13 +300,15 @@ public class Main {
 			return;
 		}
 		
+		String token = !TEST_BOT ? argsMap.get("--token") : argsMap.get("--test_token");
+		
 		// Require bot token
-		if(!argsMap.containsKey("--token"))
+		if(token == null)
 		{
 			System.err.println("You need to provide a bot token. You can provide one by creating a tokens.json file, or by passing --token=insert_token_here as a program argument.");
 			return;
 		}
 		
-		new Main(argsMap.get("--token"), argsMap.get("--test_token"), argsMap.get("--owner_id"), Boolean.parseBoolean(argsMap.get("--notify_errors")));
+		new Main(token, argsMap.get("--owner_id"), Boolean.parseBoolean(argsMap.get("--notify_errors")));
 	}
 }

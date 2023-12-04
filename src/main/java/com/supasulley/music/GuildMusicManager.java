@@ -177,7 +177,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 		}
 		else
 		{
-			builder.append("\u266A\\u266A " + parseRequestInfo(true, currentRequest));
+			builder.append("\u266A " + parseRequestInfo(true, currentRequest));
 			
 			if(!queue.isEmpty())
 			{
@@ -227,6 +227,14 @@ public class GuildMusicManager extends AudioEventAdapter {
 	public boolean isPlaying()
 	{
 		return player.getPlayingTrack() != null ? true : false;
+	}
+	
+	/**
+	 * @return currently playing {@link AudioRequest}, or null if nothing is playing
+	 */
+	public AudioRequest getCurrentRequest()
+	{
+		return currentRequest;
 	}
 	
 	/**
