@@ -19,8 +19,10 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.supasulley.main.Main;
 
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -264,5 +266,42 @@ public class AudioHandler {
 		int hours = (int) (duration / 3600000);
 		
 		return (hours != 0 ? String.format("%02d", hours) + ":" : "") + String.format("%02d", minutes) + ":" + String.format("%02d", seconds);
+	}
+	
+	public void tick(JDA jda)
+	{
+		musicManagers.forEach((key, value) ->
+		{
+			// If this manager isn't playing anything
+			if(!value.isPlaying())
+			{
+				// Check if the channel is empty
+				Guild guild = jda.getGuildById(key);
+				
+				if(guild != null)
+				{
+					AudioChannel channel = guild.getAudioManager().getConnectedChannel();
+					
+					if(channel != null)
+					{
+						// Count all non-bot users
+						int nonBots = 0;
+						
+						for(Member member : channel.getMembers())
+						{
+							if(!member.getUser().isBot())
+							{
+								nonBots++;
+							}
+						}
+						
+						if(nonBots == 0)
+						{
+							guild.getAudioManager().closeAudioConnection();
+						}
+					}
+				}
+			}
+		});
 	}
 }

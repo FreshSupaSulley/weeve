@@ -18,6 +18,7 @@ import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.ExceptionEvent;
+import net.dv8tion.jda.api.events.GatewayPingEvent;
 import net.dv8tion.jda.api.events.guild.GuildLeaveEvent;
 import net.dv8tion.jda.api.events.guild.UnavailableGuildLeaveEvent;
 import net.dv8tion.jda.api.events.guild.voice.GuildVoiceUpdateEvent;
@@ -222,33 +223,18 @@ public class InputListener extends ListenerAdapter {
 	}
 	
 	@Override
+	public void onGatewayPing(GatewayPingEvent event)
+	{
+		// Make sure we're not in a call by ourselves
+		audioHandler.tick(event.getJDA());
+	}
+	
+	@Override
 	public void onGuildVoiceUpdate(GuildVoiceUpdateEvent event)
 	{
 		Guild guild = event.getGuild();
 		
-		// If this event has to do with the bot
-		if(event.getMember().getId().equals(Main.BOT_ID))
-		{
-			AudioChannel joined = event.getChannelJoined();
-			
-			// If we didn't move to another channel and were disconnected
-			if(joined == null)
-			{
-				audioHandler.getGuildAudioPlayer(guild).reset();
-			}
-			else
-			{
-				AudioRequest request = audioHandler.getGuildAudioPlayer(guild).getCurrentRequest();
-				
-				// If the bot left the call
-				if(checkCallStatus(event))
-				{
-					request.sendToOrigin(Main.BOT_NAME + " was moved to an empty call");
-				}
-			}
-		}
-		// If someone else left (we don't care if someone joined anything)
-		else if(event.getChannelLeft() != null)
+		if(event.getChannelLeft() != null)
 		{
 			GuildMusicManager manager = audioHandler.getGuildAudioPlayer(guild);
 			
@@ -260,41 +246,24 @@ public class InputListener extends ListenerAdapter {
 				if(audioChannel.getIdLong() == event.getChannelLeft().getIdLong())
 				{
 					AudioRequest request = audioHandler.getGuildAudioPlayer(guild).getCurrentRequest();
+					GuildVoiceState state = guild.getSelfMember().getVoiceState();
 					
-					// If the bot left the call
-					if(checkCallStatus(event))
+					if(state.inAudioChannel())
 					{
-						request.sendToOrigin("All users left " + audioChannel.getName());
+						AudioChannel channel = state.getChannel();
+						
+						// If the channel is now empty
+						if(channel.getMembers().size() < 2)
+						{
+							// Leave the call
+							audioHandler.getGuildAudioPlayer(guild).reset();
+							guild.getAudioManager().closeAudioConnection();
+							request.sendToOrigin("**" + channel.getName() + "** is empty. Leaving...");
+						}
 					}
 				}
 			}
 		}
-	}
-	
-	/**
-	 * Handles the bot's behavior if someone moved or disconnected it, or if a member left a channel.
-	 * @param event the event
-	 * @return true if the bot stopped playback, false otherwise
-	 */
-	private boolean checkCallStatus(GuildVoiceUpdateEvent event)
-	{
-		Guild guild = event.getGuild();
-		GuildVoiceState state = guild.getSelfMember().getVoiceState();
-		
-		if(state.inAudioChannel())
-		{
-			AudioChannel channel = state.getChannel();
-			
-			// If the channel is now empty
-			if(channel.getMembers().size() < 2)
-			{
-				audioHandler.getGuildAudioPlayer(guild).reset();
-				guild.getAudioManager().closeAudioConnection();
-				return true;
-			}
-		}
-		
-		return false;
 	}
 	
 	@Override

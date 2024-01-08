@@ -68,6 +68,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public void queue(boolean playNext, AudioRequest track)
 	{
+		System.out.println("queued");
 		// If queue is empty, immediately start it. Otherwise, add to queue
 		if(player.startTrack(track.getAudioTrack(), true))
 		{
@@ -124,12 +125,12 @@ public class GuildMusicManager extends AudioEventAdapter {
 			queue.pop();
 		}
 		
+		String trackName = isPlaying() ? player.getPlayingTrack().getInfo().title : null;
+		
 		if(nextTrack())
 		{
 			skipped++;
 		}
-		
-		String trackName = isPlaying() ? player.getPlayingTrack().getInfo().title : null;
 		
 		if(skipped == 0)
 		{
