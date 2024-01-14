@@ -5,13 +5,13 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.supasulley.music.AudioHandler;
-import com.supasulley.music.AudioRequest;
 import com.supasulley.music.GuildMusicManager;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageHistory;
 import net.dv8tion.jda.api.entities.User;
@@ -129,7 +129,7 @@ public class InputListener extends ListenerAdapter {
 					}
 				});
 				
-				if(msSkip.get() == 0) event.reply("You must choose at least one option (seconds, minutes, or hours).").queue();
+				if(msSkip.get() == 0) event.reply("You must skip at least a second").queue();
 				else event.reply(guildMusicManager.forward(msSkip.get())).queue();
 				return;
 			}
@@ -149,9 +149,8 @@ public class InputListener extends ListenerAdapter {
 				
 				if(manager.isConnected())
 				{
-					guildMusicManager.reset();
-					manager.closeAudioConnection();
 					event.reply("Left " + manager.getConnectedChannel().getName()).queue();
+					audioHandler.leaveCall(guild);
 				}
 				else
 				{
@@ -219,7 +218,7 @@ public class InputListener extends ListenerAdapter {
 			{
 				toDelete.get(0).delete().queue();
 			}
-		});;
+		});
 	}
 	
 	@Override
@@ -245,20 +244,28 @@ public class InputListener extends ListenerAdapter {
 				// This is better than using the AudioManager because it's apparently unreliable for async reasons
 				if(audioChannel.getIdLong() == event.getChannelLeft().getIdLong())
 				{
-					AudioRequest request = audioHandler.getGuildAudioPlayer(guild).getCurrentRequest();
 					GuildVoiceState state = guild.getSelfMember().getVoiceState();
 					
 					if(state.inAudioChannel())
 					{
 						AudioChannel channel = state.getChannel();
+						int nonBots = 0;
+						
+						// Count all bot users
+						for(Member member : channel.getMembers())
+						{
+							if(!member.getUser().isBot())
+							{
+								nonBots++;
+							}
+						}
 						
 						// If the channel is now empty
-						if(channel.getMembers().size() < 2)
+						if(nonBots == 0)
 						{
 							// Leave the call
-							audioHandler.getGuildAudioPlayer(guild).reset();
-							guild.getAudioManager().closeAudioConnection();
-							request.sendToOrigin("**" + channel.getName() + "** is empty. Leaving...");
+							manager.sendToOrigin("**" + channel.getName() + "** is empty. Leaving...");
+							audioHandler.leaveCall(guild);
 						}
 					}
 				}
@@ -275,7 +282,7 @@ public class InputListener extends ListenerAdapter {
 	@Override
 	public void onUnavailableGuildLeave(UnavailableGuildLeaveEvent event)
 	{
-		audioHandler.deleteGuild(event.getGuildIdLong());
+		audioHandler.deleteMusicManager(event.getGuildIdLong());
 	}
 	
 	@Override

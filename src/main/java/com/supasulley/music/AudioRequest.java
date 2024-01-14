@@ -3,19 +3,16 @@ package com.supasulley.music;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
-import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 
 public class AudioRequest {
 	
 	private AudioTrack track;
 	private AudioChannel audioChannel;
-	private MessageChannel requestOrigin;
 	
-	public AudioRequest(AudioTrack track, AudioChannel audioChannel, MessageChannel requestOrigin)
+	public AudioRequest(AudioTrack track, AudioChannel audioChannel)
 	{
 		this.track = track;
 		this.audioChannel = audioChannel;
-		this.requestOrigin = requestOrigin;
 	}
 	
 	public AudioChannel getAudioChannel()
@@ -26,12 +23,6 @@ public class AudioRequest {
 	public AudioTrack getAudioTrack()
 	{
 		return track;
-	}
-	
-	public void sendToOrigin(String message)
-	{
-		System.out.println("Sending \"" + message + "\" to voice request origin");
-		requestOrigin.sendMessage(message).queue();
 	}
 	
 	public void openAudioConnection()

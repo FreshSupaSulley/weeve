@@ -11,6 +11,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 
 /**
  * Handles all music management for a guild.
@@ -26,6 +27,9 @@ public class GuildMusicManager extends AudioEventAdapter {
 	private boolean loop;
 	private int loops;
 	
+	private long lastPlay;
+	private MessageChannel messageChannel;
+	
 	public GuildMusicManager(AudioPlayerManager manager)
 	{
 		this.player = manager.createPlayer();
@@ -38,13 +42,15 @@ public class GuildMusicManager extends AudioEventAdapter {
 	@Override
 	public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason)
 	{
+		lastPlay = System.currentTimeMillis();
+		
 		// Only start the next track if the end reason is suitable for it (FINISHED or LOAD_FAILED)
 		if(endReason.mayStartNext)
 		{
 			if(loop)
 			{
 				player.startTrack(track.makeClone(), false);
-				currentRequest.sendToOrigin("Loop **" + ++loops + "** of **" + track.getInfo().title + "**");
+				sendToOrigin("Loop **" + ++loops + "** of **" + track.getInfo().title + "**");
 			}
 			else
 			{
@@ -57,7 +63,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception)
 	{
 		System.err.println("Error loading " + track.getInfo().uri);
-		currentRequest.sendToOrigin("An error occured loading **" + track.getInfo().title + "** (<" + track.getInfo().uri + ">). Skipping...");
+		sendToOrigin("An error occured loading **" + track.getInfo().title + "** (<" + track.getInfo().uri + ">). Skipping...");
 		nextTrack();
 	}
 	
@@ -65,10 +71,13 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 * Add the next track to queue, or plays immediately if empty.
 	 * @param playNext true if track should be inserted to the top of the queue, false to the back
 	 * @param track the track
+	 * @param textChannel origin text channel
 	 */
-	public void queue(boolean playNext, AudioRequest track)
+	public void queue(boolean playNext, AudioRequest track, MessageChannel textChannel)
 	{
-		System.out.println("queued");
+		this.messageChannel = textChannel;
+		lastPlay = System.currentTimeMillis();
+		
 		// If queue is empty, immediately start it. Otherwise, add to queue
 		if(player.startTrack(track.getAudioTrack(), true))
 		{
@@ -120,6 +129,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 		int skipped = 0;
 		
 		// (amount - 1) to skip the playing track
+		// I don't use while loops :sunglasses:
 		for(; skipped < (amount - 1) && !queue.isEmpty(); skipped++)
 		{
 			queue.pop();
@@ -159,9 +169,16 @@ public class GuildMusicManager extends AudioEventAdapter {
 			return "Can't fast-forward streams";
 		}
 		
-		long position = Math.max(track.getPosition() + millis, track.getDuration());
-		track.setPosition(position);
+		long position = Math.min(track.getPosition() + millis, track.getDuration());
 		
+		// If we skipped to the end
+		if(track.getDuration() == position)
+		{
+			return skipTracks(1);
+		}
+		
+		// Skip the time
+		track.setPosition(position);
 		return "Skipped to **" + AudioHandler.parseDuration(position) + "**/" + AudioHandler.parseDuration(track.getDuration()) + " of playing track";
 	}
 	
@@ -281,5 +298,26 @@ public class GuildMusicManager extends AudioEventAdapter {
 	public AudioPlayerSendHandler getSendHandler()
 	{
 		return sendHandler;
+	}
+	
+	/**
+	 * @return time last track was queued
+	 */
+	public long timeSinceLastRequest()
+	{
+		return System.currentTimeMillis() - lastPlay;
+	}
+	
+	public void sendToOrigin(String message)
+	{
+		if(messageChannel != null)
+		{
+			System.out.println("Sending \"" + message + "\" to voice request origin");
+			messageChannel.sendMessage(message).queue();
+		}
+		else
+		{
+			System.out.println("This isn't supposed to happen :( messageChannel is null");
+		}
 	}
 }

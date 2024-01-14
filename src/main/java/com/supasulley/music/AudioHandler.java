@@ -2,7 +2,9 @@ package com.supasulley.music;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,7 +24,6 @@ import com.supasulley.main.Main;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -32,6 +33,9 @@ import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
 import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
 
 public class AudioHandler {
+	
+	// 5 minutes before the bot leaves
+	private static final long IDLE_TIME = 5000 * 60;
 	
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
@@ -174,7 +178,7 @@ public class AudioHandler {
 					result.complete("Now playing **" + track.getInfo().title + " (" + parseDuration(track.getDuration()) + ")**");
 				}
 				
-				musicManager.queue(playNext, new AudioRequest(track, audioChannel, textChannel));
+				musicManager.queue(playNext, new AudioRequest(track, audioChannel), textChannel);
 			}
 			
 			@Override
@@ -205,7 +209,7 @@ public class AudioHandler {
 				for(int i = 0; i < playlist.getTracks().size(); i++)
 				{
 					int index = flipOrder ? playlist.getTracks().size() - i - 1 : i;
-					musicManager.queue(playNext, new AudioRequest(playlist.getTracks().get(index), audioChannel, textChannel));
+					musicManager.queue(playNext, new AudioRequest(playlist.getTracks().get(index), audioChannel), textChannel);
 				}
 			}
 			
@@ -231,7 +235,7 @@ public class AudioHandler {
 	}
 	
 	/**
-	 * Gets the GuildMusicManager for a particular guild using the guild's ID
+	 * Gets the GuildMusicManager for a particular guild
 	 */
 	public GuildMusicManager getGuildAudioPlayer(Guild guild)
 	{
@@ -248,7 +252,20 @@ public class AudioHandler {
 		return musicManager;
 	}
 	
-	public void deleteGuild(long guildID)
+	/**
+	 * Leaves the guild's audio channel and deletes it from the music managers. Used when the bot is done being used.
+	 * @param guild the guild
+	 */
+	public void leaveCall(Guild guild)
+	{
+		guild.getAudioManager().closeAudioConnection();
+		deleteMusicManager(guild.getIdLong());
+	}
+	
+	/**
+	 * Deletes the music manager from the list.
+	 */
+	public void deleteMusicManager(long guildID)
 	{
 		GuildMusicManager musicManager = musicManagers.get(guildID);
 		
@@ -270,38 +287,28 @@ public class AudioHandler {
 	
 	public void tick(JDA jda)
 	{
-		musicManagers.forEach((key, value) ->
+		Iterator<Entry<Long, GuildMusicManager>> iterator = musicManagers.entrySet().iterator();
+		
+		while(iterator.hasNext())
 		{
+			Entry<Long, GuildMusicManager> entry = iterator.next();
+			GuildMusicManager manager = entry.getValue();
+			
 			// If this manager isn't playing anything
-			if(!value.isPlaying())
+			if(manager.timeSinceLastRequest() > IDLE_TIME)
 			{
 				// Check if the channel is empty
-				Guild guild = jda.getGuildById(key);
+				Guild guild = jda.getGuildById(entry.getKey());
 				
 				if(guild != null)
 				{
-					AudioChannel channel = guild.getAudioManager().getConnectedChannel();
-					
-					if(channel != null)
-					{
-						// Count all non-bot users
-						int nonBots = 0;
-						
-						for(Member member : channel.getMembers())
-						{
-							if(!member.getUser().isBot())
-							{
-								nonBots++;
-							}
-						}
-						
-						if(nonBots == 0)
-						{
-							guild.getAudioManager().closeAudioConnection();
-						}
-					}
+					// Check if its been a while since the last command
+					manager.sendToOrigin("Left due to inactivity");
+					guild.getAudioManager().closeAudioConnection();
 				}
+				
+				iterator.remove();
 			}
-		});
+		}
 	}
 }
