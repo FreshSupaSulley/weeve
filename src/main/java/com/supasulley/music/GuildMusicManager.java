@@ -317,7 +317,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 		}
 		else
 		{
-			System.out.println("This isn't supposed to happen :( messageChannel is null");
+			System.out.println("This isn't supposed to happen :( messageChannel is null, tried to send " + message);
 		}
 	}
 }
