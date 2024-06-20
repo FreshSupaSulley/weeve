@@ -198,10 +198,10 @@ public class Main {
 			Commands.slash("play", "Play a song").addOptions(songRequest),
 			Commands.slash("next", "Forces a song to play next").addOptions(songRequest),
 			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)),
-			Commands.slash("reset", "Skips all songs"),
 			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)),
 			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)),
 			Commands.slash("queue", "See queued songs"),
+			Commands.slash("stop", "Stops playback"),
 			Commands.slash("leave", "Leaves the call"),
 			Commands.slash("clean-up", "Deletes commands")
 		};

@@ -92,10 +92,10 @@ public class InputListener extends ListenerAdapter {
 				event.reply(guildMusicManager.skipTracks(songs)).queue();
 				return;
 			}
-			case "reset":
+			case "stop":
 			{
 				guildMusicManager.reset();
-				event.reply("Skipped all tracks").queue();
+				event.reply("Stopped playback").queue();
 				return;
 			}
 			case "forward":
@@ -264,7 +264,7 @@ public class InputListener extends ListenerAdapter {
 						if(nonBots == 0)
 						{
 							// Leave the call
-							manager.sendToOrigin("**" + channel.getName() + "** is empty. Leaving...");
+							manager.sendToOrigin("All users left **" + channel.getName() + "**");
 							audioHandler.leaveCall(guild);
 						}
 					}

@@ -34,8 +34,8 @@ import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
 
 public class AudioHandler {
 	
-	// 5 minutes before the bot leaves
-	private static final long IDLE_TIME = 5000 * 60;
+	// 1 hour before the bot leaves
+	private static final long IDLE_TIME = 60 * 1000 * 60;
 	
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
@@ -294,8 +294,8 @@ public class AudioHandler {
 			Entry<Long, GuildMusicManager> entry = iterator.next();
 			GuildMusicManager manager = entry.getValue();
 			
-			// If this manager isn't playing anything
-			if(manager.timeSinceLastRequest() > IDLE_TIME)
+			// If this manager isn't playing anything AND it's been a fat sec since we've had to handle a request
+			if(!manager.isPlaying() && manager.timeSinceLastRequest() > IDLE_TIME)
 			{
 				// Check if the channel is empty
 				Guild guild = jda.getGuildById(entry.getKey());

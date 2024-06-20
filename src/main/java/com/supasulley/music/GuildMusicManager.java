@@ -195,7 +195,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 		}
 		else
 		{
-			builder.append("\u266A " + parseRequestInfo(true, currentRequest));
+			builder.append("\u266A " + parseRequestInfo(true, currentRequest) + " (" + currentRequest.getAudioTrack().getInfo().uri + ")");
 			
 			if(!queue.isEmpty())
 			{
