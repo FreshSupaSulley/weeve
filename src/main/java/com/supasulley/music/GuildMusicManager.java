@@ -8,7 +8,6 @@ import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
-import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
@@ -25,7 +24,6 @@ public class GuildMusicManager extends AudioEventAdapter {
 	private final LinkedBlockingDeque<AudioRequest> queue;
 	private AudioRequest currentRequest;
 	private boolean loop;
-	private int loops;
 	
 	private long lastPlay;
 	private MessageChannel messageChannel;
@@ -50,7 +48,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 			if(loop)
 			{
 				player.startTrack(track.makeClone(), false);
-				sendToOrigin("Loop **" + ++loops + "** of **" + track.getInfo().title + "**");
+				// This makes short tracks susceptible to causing spam
+//				sendToOrigin("Loop **" + ++loops + "** of " + new RequestInfoBuilder().bold().apply(track));
 			}
 			else
 			{
@@ -63,14 +62,15 @@ public class GuildMusicManager extends AudioEventAdapter {
 	public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception)
 	{
 		System.err.println("Error loading " + track.getInfo().uri);
-		sendToOrigin("An error occured loading **" + track.getInfo().title + "** (<" + track.getInfo().uri + ">). Skipping...");
+		sendToOrigin("Error loading " + new RequestInfoBuilder().bold().apply(track) + " [(link)](<" + track.getInfo().uri + ">):\n`" + exception.getMessage() + "`");
 		nextTrack();
 	}
 	
 	/**
 	 * Add the next track to queue, or plays immediately if empty.
-	 * @param playNext true if track should be inserted to the top of the queue, false to the back
-	 * @param track the track
+	 * 
+	 * @param playNext    true if track should be inserted to the top of the queue, false to the back
+	 * @param track       the track
 	 * @param textChannel origin text channel
 	 */
 	public void queue(boolean playNext, AudioRequest track, MessageChannel textChannel)
@@ -96,6 +96,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	
 	/**
 	 * Start the next track, stopping the current one if it is playing.
+	 * 
 	 * @return true if the track was skipped, false if nothing was playing
 	 */
 	private boolean nextTrack()
@@ -121,6 +122,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	
 	/**
 	 * Skips a number of tracks.
+	 * 
 	 * @param amount number of tracks
 	 * @return response to command
 	 */
@@ -129,14 +131,28 @@ public class GuildMusicManager extends AudioEventAdapter {
 		int skipped = 0;
 		
 		// (amount - 1) to skip the playing track
-		// I don't use while loops :sunglasses:
+		// Fuck while loops :sunglasses:
 		for(; skipped < (amount - 1) && !queue.isEmpty(); skipped++)
 		{
 			queue.pop();
 		}
 		
-		String trackName = isPlaying() ? player.getPlayingTrack().getInfo().title : null;
+		// NEW BEHAVIOR:
+		// Disable looping upon skipping
+		boolean oldLoop = loop;
+		loop(false);
 		
+		// If looping was stopped
+		String loopSuffix = "";
+		
+		if(oldLoop != loop)
+		{
+			loopSuffix = " and stopped loop";
+		}
+		
+		AudioTrack playingTrack = player.getPlayingTrack();
+		
+		// nextTrack() DOES SOMETHING!!
 		if(nextTrack())
 		{
 			skipped++;
@@ -148,20 +164,25 @@ public class GuildMusicManager extends AudioEventAdapter {
 		}
 		else if(skipped == 1)
 		{
-			return "Skipped **" + trackName + "**";
+			// Old code suggests playing track could be null here at some point
+			// Choosing to look the other way like a piece of shit
+			return "Skipped " + new RequestInfoBuilder().bold().apply(playingTrack) + loopSuffix;
 		}
 		
-		return "Skipped **" + skipped + "** track" + (skipped > 1 ? "s" : "");
+		// If the queue is now cleared it means you skipped all tracks
+		return "Skipped " + (queue.isEmpty() ? "all" : "**" + skipped + "**") + " track" + (skipped > 1 ? "s" : "") + loopSuffix;
 	}
 	
 	/**
 	 * Fast-forwards the playing track by the provided milliseconds.
+	 * 
 	 * @param millis number of millis to fast-forward the track by
 	 * @return response to command
 	 */
 	public String forward(long millis)
 	{
-		if(!isPlaying()) return "Nothing is playing";
+		if(!isPlaying())
+			return "Nothing is playing";
 		AudioTrack track = player.getPlayingTrack();
 		
 		if(track.getInfo().isStream)
@@ -195,11 +216,11 @@ public class GuildMusicManager extends AudioEventAdapter {
 		}
 		else
 		{
-			builder.append("\u266A " + parseRequestInfo(true, currentRequest) + " (" + currentRequest.getAudioTrack().getInfo().uri + ")");
+			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(currentRequest.getAudioTrack()));
 			
 			if(!queue.isEmpty())
 			{
-				builder.append("\n**On deck**: " + parseRequestInfo(false, queue.peek()));
+				builder.append("\n**On deck**: " + new RequestInfoBuilder().showDuration().showLink().apply(queue.peek().getAudioTrack()));
 				int request = 1;
 				
 				for(AudioRequest sample : queue)
@@ -211,7 +232,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 						continue;
 					}
 					
-					builder.append("\n**#" + ++request + "**: " + parseRequestInfo(false, sample));
+					builder.append("\n**#" + ++request + "**: " + new RequestInfoBuilder().showDuration().showLink().apply(sample.getAudioTrack()));
 					
 					// If we've already printed 10 tracks, and there's more to print
 					if(request > 8 && queue.size() > request)
@@ -229,14 +250,9 @@ public class GuildMusicManager extends AudioEventAdapter {
 		}
 		
 		String result = builder.toString();
-		if(result.length() > Message.MAX_CONTENT_LENGTH) result = result.substring(0, Message.MAX_CONTENT_LENGTH - 3) + "...";
+		if(result.length() > Message.MAX_CONTENT_LENGTH)
+			result = result.substring(0, Message.MAX_CONTENT_LENGTH - 3) + "...";
 		return result;
-	}
-	
-	private String parseRequestInfo(boolean boldTitle, AudioRequest track)
-	{
-		AudioTrackInfo info = track.getAudioTrack().getInfo();
-		return (boldTitle ? "**" : "") + info.title + (boldTitle ? "**" : "") + " (**" + AudioHandler.parseDuration(info.length) + "**)";
 	}
 	
 	/**
@@ -257,6 +273,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	
 	/**
 	 * Enables or disables the current track.
+	 * 
 	 * @param toggle true to enable looping, false to disable looping
 	 * @return response to command
 	 */
@@ -272,11 +289,10 @@ public class GuildMusicManager extends AudioEventAdapter {
 			// Sets loop = toggle, and if looping is now off
 			if(!(this.loop = toggle))
 			{
-				loops = 0;
 				return "Looping turned off";
 			}
 			
-			return "Looping turned on";
+			return "Looping turned on. Skipping the track will stop the loop.";
 		}
 	}
 	
@@ -289,7 +305,6 @@ public class GuildMusicManager extends AudioEventAdapter {
 		player.startTrack(null, false);
 		currentRequest = null;
 		loop = false;
-		loops = 0;
 	}
 	
 	/**

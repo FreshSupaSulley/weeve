@@ -13,7 +13,6 @@ import java.util.function.Function;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeSearchProvider;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
@@ -21,6 +20,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.supasulley.main.Main;
 
+import dev.lavalink.youtube.YoutubeAudioSourceManager;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -29,6 +29,7 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.Interaction;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
 import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
 
@@ -39,6 +40,8 @@ public class AudioHandler {
 	
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
+	
+	private final YoutubeAudioSourceManager ytSourceManager;
 	
 	public enum ButtonCode {
 		
@@ -64,14 +67,29 @@ public class AudioHandler {
 	public AudioHandler()
 	{
 		this.playerManager = new DefaultAudioPlayerManager();
+		
+		// YouTube plugin
+		this.ytSourceManager = new YoutubeAudioSourceManager();
+		ytSourceManager.useOauth2(null, false);
+		playerManager.registerSourceManager(ytSourceManager);
+		
 		this.musicManagers = new HashMap<Long, GuildMusicManager>();
 		
-		AudioSourceManagers.registerLocalSource(playerManager);
-		AudioSourceManagers.registerRemoteSources(playerManager);
+		// OLD
+//		AudioSourceManagers.registerLocalSource(playerManager);
+//		AudioSourceManagers.registerRemoteSources(playerManager);
 	}
 	
 	public void handleSongRequest(ButtonCode code, long userID, SlashCommandInteractionEvent event)
 	{
+		// First check if we are authenticated with YouTube
+		// If we don't have a refresh token yet
+		if(ytSourceManager.getOauth2RefreshToken() == null)
+		{
+			event.reply("Link " + Main.BOT_NAME + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + ytSourceManager.getOauth2Handler().getUserCode() + "**.").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
+			return;
+		}
+		
 		// Get member audio channel
 		AudioChannel audioChannel;
 		
@@ -93,6 +111,7 @@ public class AudioHandler {
 				AtomicReference<String> reference = new AtomicReference<String>("**Select a track:**");
 				ArrayList<ButtonImpl> buttons = new ArrayList<ButtonImpl>();
 				
+				// Do I need to migrate this??
 				YoutubeSearchProvider provider = new YoutubeSearchProvider();
 				provider.loadSearchResult(query, new Function<AudioTrackInfo, AudioTrack>()
 				{
@@ -101,7 +120,8 @@ public class AudioHandler {
 					@Override
 					public AudioTrack apply(AudioTrackInfo t)
 					{
-						if(index < 5)
+						// Streams can't be played
+						if(!t.isStream && index < 5)
 						{
 							buttons.add(new ButtonImpl(code.getCode() + "" + t.uri, "" + ++index, ButtonStyle.PRIMARY, false, null));
 							reference.set(reference.get() + "\n" + "**" + index + ":** " + t.title + " (**" + parseDuration(t.length) + "**)");
@@ -148,7 +168,7 @@ public class AudioHandler {
 		// If the user is not in a voice channel
 		if(audioChannel == null)
 		{
-			throw new Exception("Hop in a call to play songs");
+			throw new Exception("Join a voice channel to play songs");
 		}
 		
 		if(!guild.getSelfMember().hasPermission(event.getMember().getVoiceState().getChannel(), Permission.VOICE_CONNECT))
@@ -171,11 +191,11 @@ public class AudioHandler {
 			{
 				if(musicManager.isPlaying())
 				{
-					result.complete("**" + track.getInfo().title + " (" + parseDuration(track.getDuration()) + ")" + "** " + (playNext ? "will play next" : "added to queue"));
+					result.complete(new RequestInfoBuilder().bold().showDuration().showLink().apply(track) + " " + (playNext ? "will play next" : "added to queue"));
 				}
 				else
 				{
-					result.complete("Now playing **" + track.getInfo().title + " (" + parseDuration(track.getDuration()) + ")**");
+					result.complete("Now playing " + new RequestInfoBuilder().bold().showDuration().showLink().apply(track));
 				}
 				
 				musicManager.queue(playNext, new AudioRequest(track, audioChannel), textChannel);
@@ -192,15 +212,15 @@ public class AudioHandler {
 				}
 				
 				boolean flipOrder = playNext;
-				String suffix = " (first song of playlist **" + playlist.getName() + "** with **" + playlist.getTracks().size() + "** songs)";
+				String suffix = " (first song of playlist **" + playlist.getName() + "** with **" + playlist.getTracks().size() + "** tracks)";
 				
 				if(musicManager.isPlaying())
 				{
-					result.complete("**" + firstTrack.getInfo().title + "** " + (playNext ? "will play next" : "added to queue") + suffix);
+					result.complete(new RequestInfoBuilder().bold().showDuration().showLink().apply(firstTrack) + " " + (playNext ? "will play next" : "added to queue") + suffix);
 				}
 				else
 				{
-					result.complete("Now playing **" + firstTrack.getInfo().title + "** " + suffix);
+					result.complete("Now playing " + new RequestInfoBuilder().bold().showDuration().showLink().apply(firstTrack) + suffix);
 					// No need to flip the order if nothing is playing
 					flipOrder = false;
 				}
@@ -300,7 +320,7 @@ public class AudioHandler {
 				// Check if the channel is empty
 				Guild guild = jda.getGuildById(entry.getKey());
 				
-				if(guild != null)
+				if(guild != null && guild.getAudioManager().isConnected())
 				{
 					// Check if its been a while since the last command
 					manager.sendToOrigin("Left due to inactivity");

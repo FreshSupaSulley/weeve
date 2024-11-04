@@ -8,11 +8,11 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 - [ ] Offers free hosting
 - [ ] Scalable
 
-**weeve is an engine, not a bot**. You make one and weeve runs it, no coding required.
+**weeve is a bot engine, not a bot**. You make a bot and weeve runs it.
 
 # Setup
 >[!NOTE]
->This requires basic knowledge of running jars and using the command line.
+>This requires basic knowledge of running jars, using the command line, and JSON.
 
 weeve runs on Java 11, which should be backward compatible with newer versions. Make sure you have Java installed by running ```java -version```.
 

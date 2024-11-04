@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.supasulley</groupId>
 	<artifactId>weeve</artifactId>
-	<version>1.0.2</version>
+	<version>1.1.0</version>
 	<packaging>jar</packaging>
 	<name>weeve</name>
 	<url>https://github.com/FreshSupaSulley/weeve</url>
@@ -56,12 +56,19 @@
 			<artifactId>logback-classic</artifactId>
 			<version>1.2.8</version>
 		</dependency>
-		<!-- Working Lavaplayer that retries YouTube tracks when 403s are
-		encountered -->
+		<!-- Lavaplayer -->
 		<dependency>
-			<groupId>com.github.lavalink-devs</groupId>
+			<groupId>dev.arbjerg</groupId>
 			<artifactId>lavaplayer</artifactId>
-			<version>afec211f05c9dcf0b6ee44276a02f0316ea2458a</version>
+			<version>2.2.2</version>
+		</dependency>
+		<!-- Custom built youtube-source (ignore an absolute path error) -->
+		<dependency>
+			<groupId>youtube-source</groupId>
+			<artifactId>youtube-artifact</artifactId>
+			<version>1.0.0</version>
+			<scope>system</scope>
+			<systemPath>${project.basedir}/lib/weeve-lavalink-youtube-1.0.jar</systemPath>
 		</dependency>
 		<!-- Lavaplayer Raspberry PI natives-->
 		<!--<dependency>
