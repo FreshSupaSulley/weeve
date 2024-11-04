@@ -2,10 +2,10 @@
 Run your Discord bot with weeve to play YouTube in voice calls.
 
 - [x] Supports YouTube in voice calls
-- [x] Ability to search for videos and play links
-- [x] You customize the bot avatar
-- [x] Minimal commands
-- [ ] Offers free hosting
+- [x] Can search for videos and play links
+- [x] Customizable bot avatar
+- [x] Basic commands
+- [ ] Free cloud hosting service
 - [ ] Scalable
 
 **weeve is a bot engine, not a bot**. You make a bot and weeve runs it.
@@ -14,7 +14,7 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 >[!NOTE]
 >This requires basic knowledge of running jars, using the command line, and JSON.
 
-weeve runs on Java 11, which should be backward compatible with newer versions. Make sure you have Java installed by running ```java -version```.
+weeve runs on Java 11, which should be backwards compatible with newer versions. Make sure you have Java installed by running ```java -version```.
 
 1. [Create a new Discord bot](#q-i-dont-know-how-to-make-a-discord-bot).
 2. Download the [latest release](https://github.com/FreshSupaSulley/weeve/releases/latest) of *weeve.jar*. Move it into a new folder.
@@ -28,6 +28,15 @@ weeve runs on Java 11, which should be backward compatible with newer versions. 
    java -jar weeve.jar
    ```
    weeve will read the *tokens.json* file in the working directory and use it to run your bot. Allow a few minutes before restarting Discord for the slash commands to appear.
+
+# Link with Google
+When you try to play a track for the first time after startup, weeve will ask you to link a Google account. Paste the generated code into the Google login link it provides and you're good to go.
+
+> [!NOTE]
+> weeve uses Lavalink's [YouTube Plugin](https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-oauth-tokens) to load YouTube tracks, and it requires the client to link a Google account to be able to access YouTube's API.
+
+> [!WARNING]
+> I **strongly recommend** you use a burner account to link with Google. Although unlikely, your bot may get flagged and you risk getting your Google account banned. Visit [YouTube Plugin](https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-oauth-tokens) for details.
 
 # Commands
 | Name | Description |
@@ -80,8 +89,8 @@ Use command line arguments to avoid using a tokens file: `java -jar weeve.jar --
 ### 4. Error handling
 Setting `notify_errors` in *tokens.json* to `true` or as a command line argument (`--notify_errors`) will allow the user at the `owner_id` to receive notifications if errors occur. Detailed logs are recorded in the running directory.
 
-# Engine
-weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It uses a fork of LavaPlayer that is changing so much I'm not bothering trying to update the README, just check pom.xml. weeve is intentionally not built to scale (no sharding) because you cannot verify a bot that violates the Discord terms of service. I have not tested weeve's performance when handling playback for many servers simultaneously.
+# Dependencies
+weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It uses a fork of [LavaPlayer](https://github.com/lavalink-devs/Lavalink) and a [YouTube source manager plugin](https://github.com/lavalink-devs/youtube-source) maintained by Lavalink <3. weeve is intentionally not built to scale (no sharding), partly because you can't verify a bot that violates the Discord terms of service, but mostly because it's too much work. I have not tested weeve's performance when simultaneously handling playback for many servers.
 
 # Contributing
 Feel free to do whatever you want with this repository. If you find a bug, please open an issue with the logs attached.
