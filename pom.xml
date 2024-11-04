@@ -9,23 +9,49 @@
 	<name>weeve</name>
 	<url>https://github.com/FreshSupaSulley/weeve</url>
 	<build>
-		<plugins>
-			<plugin>
-				<artifactId>maven-assembly-plugin</artifactId>
-				<configuration>
-					<finalName>${project.artifactId}_${project.version}</finalName>
-					<appendAssemblyId>false</appendAssemblyId>
-					<archive>
-						<manifest>
-							<mainClass>com.supasulley.main.Main</mainClass>
-						</manifest>
-					</archive>
-					<descriptorRefs>
-						<descriptorRef>jar-with-dependencies</descriptorRef>
-					</descriptorRefs>
-				</configuration>
-			</plugin>
-		</plugins>
+		<pluginManagement>
+			<plugins>
+				<!-- Automate putting jar into local repo before compilation -->
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-install-plugin</artifactId>
+					<executions>
+						<execution>
+							<id>install-custom-jar</id>
+							<phase>clean</phase>
+							<configuration>
+								<groupId>youtube-source</groupId>
+								<artifactId>youtube-artifact</artifactId>
+								<version>1.0.0</version>
+								<packaging>jar</packaging>
+								<file>
+									${project.basedir}/lib/weeve-lavalink-youtube-1.0.jar
+								</file>
+							</configuration>
+							<goals>
+								<goal>install-file</goal>
+							</goals>
+						</execution>
+					</executions>
+				</plugin>
+				<!-- Build jar -->
+				<plugin>
+					<artifactId>maven-assembly-plugin</artifactId>
+					<configuration>
+						<finalName>${project.artifactId}_${project.version}</finalName>
+						<appendAssemblyId>false</appendAssemblyId>
+						<archive>
+							<manifest>
+								<mainClass>com.supasulley.main.Main</mainClass>
+							</manifest>
+						</archive>
+						<descriptorRefs>
+							<descriptorRef>jar-with-dependencies</descriptorRef>
+						</descriptorRefs>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 	</build>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -63,12 +89,11 @@
 			<version>2.2.2</version>
 		</dependency>
 		<!-- Custom built youtube-source (ignore an absolute path error) -->
+		<!-- This is installed automagically with the maven-install-plugin -->
 		<dependency>
 			<groupId>youtube-source</groupId>
 			<artifactId>youtube-artifact</artifactId>
 			<version>1.0.0</version>
-			<scope>system</scope>
-			<systemPath>${project.basedir}/lib/weeve-lavalink-youtube-1.0.jar</systemPath>
 		</dependency>
 		<!-- Lavaplayer Raspberry PI natives-->
 		<!--<dependency>
