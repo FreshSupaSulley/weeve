@@ -31,6 +31,7 @@ import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.managers.AudioManager;
 import net.dv8tion.jda.api.requests.CloseCode;
+import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 
 public class InputListener extends ListenerAdapter {
 	
@@ -129,7 +130,7 @@ public class InputListener extends ListenerAdapter {
 					}
 				});
 				
-				if(msSkip.get() == 0) event.reply("You must skip at least a second").queue();
+				if(msSkip.get() == 0) event.reply("You must skip at least one second").queue();
 				else event.reply(guildMusicManager.forward(msSkip.get())).queue();
 				return;
 			}
@@ -149,7 +150,7 @@ public class InputListener extends ListenerAdapter {
 				
 				if(manager.isConnected())
 				{
-					event.reply("Left " + manager.getConnectedChannel().getName()).queue();
+					event.reply("Left **" + MarkdownSanitizer.sanitize(manager.getConnectedChannel().getName()) + "**").queue();
 					audioHandler.leaveCall(guild);
 				}
 				else
@@ -264,7 +265,7 @@ public class InputListener extends ListenerAdapter {
 						if(nonBots == 0)
 						{
 							// Leave the call
-							manager.sendToOrigin("All users left **" + channel.getName() + "**");
+							manager.sendToOrigin("All users left **" + MarkdownSanitizer.sanitize(channel.getName()) + "**");
 							audioHandler.leaveCall(guild);
 						}
 					}

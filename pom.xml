@@ -4,14 +4,14 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.supasulley</groupId>
 	<artifactId>weeve</artifactId>
-	<version>1.1.0</version>
+	<version>1.1.1</version>
 	<packaging>jar</packaging>
 	<name>weeve</name>
 	<url>https://github.com/FreshSupaSulley/weeve</url>
 	<build>
 		<pluginManagement>
 			<plugins>
-				<!-- Automate putting jar into local repo before compilation -->
+				<!-- Automate putting jar into local repo before compilation
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-install-plugin</artifactId>
@@ -33,7 +33,7 @@
 							</goals>
 						</execution>
 					</executions>
-				</plugin>
+				</plugin> -->
 				<!-- Build jar -->
 				<plugin>
 					<artifactId>maven-assembly-plugin</artifactId>
@@ -60,13 +60,8 @@
 	</properties>
 	<repositories>
 		<repository>
-			<id>dv8tion</id>
-			<name>m2-dv8tion</name>
-			<url>https://m2.dv8tion.net/releases</url>
-		</repository>
-		<repository>
-			<id>jitpack</id>
-			<url>https://jitpack.io</url>
+			<id>lavalink-releases</id>
+			<url>https://maven.lavalink.dev/snapshots</url>
 		</repository>
 	</repositories>
 	<dependencies>
@@ -89,11 +84,16 @@
 			<version>2.2.2</version>
 		</dependency>
 		<!-- Custom built youtube-source (ignore an absolute path error) -->
-		<!-- This is installed automagically with the maven-install-plugin -->
+		<!-- This is installed automagically with the maven-install-plugin
 		<dependency>
 			<groupId>youtube-source</groupId>
 			<artifactId>youtube-artifact</artifactId>
 			<version>1.0.0</version>
+		</dependency> -->
+		<dependency>
+			<groupId>dev.lavalink.youtube</groupId>
+			<artifactId>youtube-plugin</artifactId>
+			<version>aaecc8ee22e167b71648b930165b1d66ce8754e3</version>
 		</dependency>
 		<!-- Lavaplayer Raspberry PI natives-->
 		<!--<dependency>

@@ -1,5 +1,6 @@
 package com.supasulley.music;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -10,6 +11,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
+import com.grack.nanojson.JsonObject;
+import com.grack.nanojson.JsonParserException;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
@@ -21,6 +24,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.supasulley.main.Main;
 
 import dev.lavalink.youtube.YoutubeAudioSourceManager;
+import dev.lavalink.youtube.http.RefreshTokenQueryResponse;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -42,6 +46,10 @@ public class AudioHandler {
 	private final Map<Long, GuildMusicManager> musicManagers;
 	
 	private final YoutubeAudioSourceManager ytSourceManager;
+	
+	// OAuth information
+	private long lastOauthCheck, interval;
+	private String userCode, deviceCode;
 	
 	public enum ButtonCode {
 		
@@ -70,7 +78,6 @@ public class AudioHandler {
 		
 		// YouTube plugin
 		this.ytSourceManager = new YoutubeAudioSourceManager();
-		ytSourceManager.useOauth2(null, false);
 		playerManager.registerSourceManager(ytSourceManager);
 		
 		this.musicManagers = new HashMap<Long, GuildMusicManager>();
@@ -86,8 +93,75 @@ public class AudioHandler {
 		// If we don't have a refresh token yet
 		if(ytSourceManager.getOauth2RefreshToken() == null)
 		{
-			event.reply("Link " + Main.BOT_NAME + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + ytSourceManager.getOauth2Handler().getUserCode() + "**.").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
-			return;
+			// If we never logged in before
+			if(this.userCode == null)
+			{
+				Main.log.info("Starting oauth");
+				
+				// Start OAuth
+				JsonObject object = ytSourceManager.getOauth2Handler().fetchDeviceCode();
+				this.userCode = object.getString("user_code");
+				this.deviceCode = object.getString("device_code");
+				this.interval = object.getLong("interval") * 1000; // to ms
+			}
+			else
+			{
+				// Check if it came in the mail today
+				// If we are already in a state of checking and we can check again
+				if(System.currentTimeMillis() - lastOauthCheck > (interval == 0 ? 5000 : interval))
+				{
+					this.lastOauthCheck = System.currentTimeMillis();
+					
+					// Check if authenticated
+					try {
+						Main.log.info("Checking if oauth is completed");
+						RefreshTokenQueryResponse response = ytSourceManager.getOauth2Handler().getRefreshTokenByDeviceCode(deviceCode);
+						String error = response.getError();
+						
+						// If we don't have the code yet
+						if(error != null)
+						{
+							switch(error)
+							{
+								case "authorization_pending":
+								case "slow_down":
+									// Still waiting
+									Main.log.info("Still waiting on response");
+									break;
+								default:
+									// Error occurred. Restart login
+									throw new IOException(error);
+							}
+						}
+						else
+						{
+							// Success!
+							Main.log.info("Linked with Google");
+							JsonObject json = response.getJsonObject();
+							ytSourceManager.getOauth2Handler().updateTokens(json);
+							
+							// Manually set the refresh token to toggle enable flag
+							ytSourceManager.getOauth2Handler().setRefreshToken(json.getString("refresh_token"), true);
+						}
+					} catch(IOException | JsonParserException e) {
+						Main.log.warn("Failed to link with Google");
+						Main.log.warn(e.getMessage());
+						this.userCode = null;
+						this.deviceCode = null;
+					}
+				}
+			}
+			
+			// Check again if we have code
+			if(ytSourceManager.getOauth2RefreshToken() == null)
+			{
+				event.reply("Link " + Main.BOT_NAME + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + userCode + "**.").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
+				return;
+			}
+			else
+			{
+				
+			}
 		}
 		
 		// Get member audio channel
