@@ -87,7 +87,7 @@ Use command line arguments to avoid using a tokens file: `java -jar weeve.jar --
 Setting `notify_errors` in *tokens.json* to `true` or as a command line argument (`--notify_errors`) will allow the user at the `owner_id` to receive notifications if errors occur. Detailed logs are recorded in the running directory.
 
 # Dependencies
-weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It uses [Lavalink's LavaPlayer](https://github.com/lavalink-devs/Lavalink) and a fork of Lavalink's [YouTube source manager plugin](https://github.com/lavalink-devs/youtube-source). weeve is intentionally not built to scale (no sharding), partly because you can't verify a bot that violates the Discord terms of service, but mostly because it's too much work. I have not tested weeve's performance when simultaneously handling playback for many servers.
+weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to connect to Discord. It uses [Lavalink's LavaPlayer](https://github.com/lavalink-devs/Lavalink) and Lavalink's [YouTube source manager plugin](https://github.com/lavalink-devs/youtube-source). weeve is intentionally not built to scale (no sharding), partly because you can't verify a bot that violates the Discord terms of service, but mostly because it's too much work. I have not tested weeve's performance when simultaneously handling playback for many servers.
 
 # Contributing
 Feel free to do whatever you want with this repository. If you find a bug, please open an issue with the logs attached.
