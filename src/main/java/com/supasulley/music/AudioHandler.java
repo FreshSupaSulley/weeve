@@ -155,7 +155,7 @@ public class AudioHandler {
 			// Check again if we have code
 			if(ytSourceManager.getOauth2RefreshToken() == null)
 			{
-				event.reply("Link " + Main.BOT_NAME + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + userCode + "**.").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
+				event.reply("Link " + Main.getBotName() + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + userCode + "**.").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
 				return;
 			}
 			else
@@ -247,7 +247,7 @@ public class AudioHandler {
 		
 		if(!guild.getSelfMember().hasPermission(event.getMember().getVoiceState().getChannel(), Permission.VOICE_CONNECT))
 		{
-			throw new Exception(Main.BOT_NAME + " needs permission to join the call");
+			throw new Exception(Main.getBotName() + " needs permission to join the call");
 		}
 		
 		return audioChannel;
@@ -333,13 +333,12 @@ public class AudioHandler {
 	 */
 	public GuildMusicManager getGuildAudioPlayer(Guild guild)
 	{
-		long guildId = Long.parseLong(guild.getId());
-		GuildMusicManager musicManager = musicManagers.get(guildId);
+		GuildMusicManager musicManager = musicManagers.get(guild.getIdLong());
 		
 		if(musicManager == null)
 		{
 			musicManager = new GuildMusicManager(playerManager);
-			musicManagers.put(guildId, musicManager);
+			musicManagers.put(guild.getIdLong(), musicManager);
 			guild.getAudioManager().setSendingHandler(musicManager.getSendHandler());
 		}
 		

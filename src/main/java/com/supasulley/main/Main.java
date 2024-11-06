@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,18 +24,26 @@ import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Activity.ActivityType;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
+import net.dv8tion.jda.api.interactions.commands.Command;
+import net.dv8tion.jda.api.interactions.commands.Command.Subcommand;
+import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
+import net.dv8tion.jda.api.interactions.commands.ICommandReference;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
+import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.internal.JDAImpl;
 
 public class Main {
 	
 	public static final Logger log = (Logger) LoggerFactory.getLogger(Main.class);
+	public static final File LOGS_DIR = new File("/logs");
+	public static final int MAX_LOGS = 5;
 	
 	public static final String ERROR_MESSAGE = "[**INTERNAL ERROR**] An unknown error has occured. Try again later.";
-	public static String BOT_NAME, BOT_ID;
+	private static String BOT_NAME;
+	private static List<Command> commands;
 	
 	/** True to use the test bot, false for production */
 	private static boolean TEST_BOT = true;
@@ -114,7 +123,7 @@ public class Main {
 		}
 		
 		try {
-			initialize(jda);
+			initialize(jda, ownerID);
 			
 			// Notify if an owner was provided
 			if(ownerID != null)
@@ -184,25 +193,36 @@ public class Main {
 	
 	/**
 	 * Sets up the InputListener.
-	 * @param jda connected JDA instance
+	 * 
+	 * @param jda     connected JDA instance
+	 * @param ownerID optional ID of owner
 	 */
-	private void initialize(JDA jda)
+	private void initialize(JDA jda, String ownerID)
 	{
 		jda.getPresence().setPresence(Activity.of(ActivityType.PLAYING, "music"), false);
 		BOT_NAME = jda.getSelfUser().getName();
-		BOT_ID = jda.getSelfUser().getId();
+		
+		OptionData songRequest = new OptionData(OptionType.STRING, "query", "Search term or link", true);
+		SubcommandData list = new SubcommandData("list", "Lists all log files");
+		SubcommandData get = new SubcommandData("get", "Get a log file").addOption(OptionType.STRING, "file", "Log file name", true);
+		SubcommandData clear = new SubcommandData("clear", "Deletes all log files");
 		
 		// Public slash commands
-		OptionData songRequest = new OptionData(OptionType.STRING, "query", "Search term or link", true);
-		CommandData[] publicCommands = new CommandData [] {
-			Commands.slash("play", "Play a song").addOptions(songRequest),
-			Commands.slash("next", "Forces a song to play next").addOptions(songRequest),
-			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)),
-			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)),
-			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)),
-			Commands.slash("queue", "See queued songs"),
-			Commands.slash("stop", "Stops playback"),
-			Commands.slash("leave", "Leaves the call"),
+		CommandData[] commands = new CommandData [] {
+			// Public
+			Commands.slash("play", "Play a song").addOptions(songRequest).setGuildOnly(true),
+			Commands.slash("next", "Forces a song to play next").addOptions(songRequest).setGuildOnly(true),
+			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)).setGuildOnly(true),
+			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)).setGuildOnly(true),
+			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)).setGuildOnly(true),
+			Commands.slash("queue", "See queued songs").setGuildOnly(true),
+			Commands.slash("stop", "Stops playback").setGuildOnly(true),
+			Commands.slash("leave", "Leaves the call").setGuildOnly(true),
+			
+			// Private
+			Commands.slash("logs", "Manage log files").setDefaultPermissions(DefaultMemberPermissions.DISABLED).addSubcommands(list, get, clear),
+			
+			// Both
 			Commands.slash("clean-up", "Deletes commands")
 		};
 		
@@ -212,10 +232,37 @@ public class Main {
 		
 		// Update public commands
 		System.out.println("Updating slash commands");
-		jda.updateCommands().addCommands(publicCommands).complete();
+		Main.commands = jda.updateCommands().addCommands(commands).complete();
 		
 		// Create InputListener
-		jda.addEventListener(new InputListener(jda));
+		jda.addEventListener(new InputListener(jda, ownerID));
+	}
+	
+	public static ICommandReference getCommandByName(String commandName)
+	{
+		for(Command command : Main.commands)
+		{
+			for(Subcommand subcommand : command.getSubcommands())
+			{
+				if(subcommand.getFullCommandName().equals(commandName))
+				{
+					return subcommand;
+				}
+			}
+			
+			if(command.getName().equals(commandName))
+			{
+				return command;
+			}
+		}
+		
+		Main.log.error("Failed to find command by name " + commandName);
+		return null;
+	}
+	
+	public static String getBotName()
+	{
+		return Main.BOT_NAME;
 	}
 	
 	private static String loadAsString(InputStream stream) throws IOException

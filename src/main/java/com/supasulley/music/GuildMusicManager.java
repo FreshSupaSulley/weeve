@@ -61,7 +61,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	@Override
 	public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception)
 	{
-		System.err.println("Error loading " + track.getInfo().uri);
+		System.err.println("Error loading <" + track.getInfo().uri + ">");
 		sendToOrigin("Error loading " + new RequestInfoBuilder().bold().apply(track) + " [(link)](<" + track.getInfo().uri + ">):\n`" + exception.getMessage() + "`");
 		nextTrack();
 	}

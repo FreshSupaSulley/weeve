@@ -16,14 +16,35 @@
 		</encoder>
 	</appender>
 
+	<!-- Rolling File Appender -->
+	<appender name="logs"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<!-- Set the rolling policy for log files -->
+		<rollingPolicy
+			class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- File name pattern with date -->
+			<fileNamePattern>${logPath}/log.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<!-- Retain only 5 days of logs -->
+			<maxHistory>5</maxHistory>
+			<!-- Delete older logs when the history exceeds 5 days -->
+			<fileNamePattern>${logPath}/log.%d{yyyy-MM-dd}.log</fileNamePattern>
+		</rollingPolicy>
+		<!-- Log file destination -->
+		<file>${logPath}/log-current.log</file>
+		<encoder>
+			<pattern>${printFormat}</pattern>
+		</encoder>
+	</appender>
+
+	<!-- Old File Appender
 	<appender name="logs" class="ch.qos.logback.core.FileAppender">
 		<file>${logPath}/${time}.log</file>
 		<append>true</append>
 		<encoder>
 			<Pattern>${printFormat}</Pattern>
 		</encoder>
-	</appender>
-	
+	</appender> -->
+
 	<root level="all">
 		<appender-ref ref="console" />
 	</root>

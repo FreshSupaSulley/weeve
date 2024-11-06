@@ -1,6 +1,8 @@
 package com.supasulley.main;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -27,55 +29,49 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.session.SessionDisconnectEvent;
 import net.dv8tion.jda.api.events.session.SessionResumeEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.commands.ICommandReference;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.managers.AudioManager;
 import net.dv8tion.jda.api.requests.CloseCode;
+import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 
 public class InputListener extends ListenerAdapter {
 	
 	private static final int MAX_CLEARS = 50;
 	
+	private final String ownerID;
+	
 	private final AudioHandler audioHandler;
 	private long disconnected;
 	
-	public InputListener(JDA jda)
+	/**
+	 * Creates a new InputListener instance.
+	 * 
+	 * @param jda     jda instance
+	 * @param ownerID ID of bot owner, can be null
+	 */
+	public InputListener(JDA jda, String ownerID)
 	{
 		this.audioHandler = new AudioHandler();
+		this.ownerID = ownerID;
 	}
 	
 	@Override
 	public void onSlashCommandInteraction(SlashCommandInteractionEvent event)
 	{
-		if(!event.isFromGuild())
-		{
-			if(event.getName().equals("clean-up"))
-			{
-				handleClearRequest(event.getMessageChannel());
-				event.reply("Clearing " + MAX_CLEARS + "...").setEphemeral(true).queue();
-				return;
-			}
-			else
-			{
-				event.reply("DM commands are not supported. Please use " + Main.BOT_NAME + " in your server.").setEphemeral(true).queue();
-			}
-			
-			return;
-		}
-		
 		// Message content
 		String content = event.getCommandString();
-		if(content.contains(":")) content = content.substring(content.indexOf(":") + 2);
+		if(content.contains(":"))
+			content = content.substring(content.indexOf(":") + 2);
 		
 		User user = event.getUser();
 		Guild guild = event.getGuild();
 		
-		System.out.println("[SLASH COMMAND (" + guild.getId() + ", channel #" + event.getChannel().getId() + ") - '" + user.getName() + "']: \"" + event.getCommandString() + "\"");
+		Main.log.info("[SLASH COMMAND (" + (event.isFromGuild() ? (guild.getId() + ", channel #" + event.getChannel().getId()) : user.getId()) + ") - '" + user.getName() + "']: \"" + event.getCommandString() + "\"");
 		
-		GuildMusicManager guildMusicManager = audioHandler.getGuildAudioPlayer(guild);
-		
-		switch(event.getFullCommandName())
+		switch(event.getName())
 		{
 			case "play":
 			{
@@ -90,17 +86,18 @@ public class InputListener extends ListenerAdapter {
 			case "skip":
 			{
 				int songs = event.getOption("amount", 1, OptionMapping::getAsInt);
-				event.reply(guildMusicManager.skipTracks(songs)).queue();
+				event.reply(audioHandler.getGuildAudioPlayer(guild).skipTracks(songs)).queue();
 				return;
 			}
 			case "stop":
 			{
-				guildMusicManager.reset();
+				audioHandler.getGuildAudioPlayer(guild).reset();
 				event.reply("Stopped playback").queue();
 				return;
 			}
 			case "forward":
 			{
+				GuildMusicManager guildMusicManager = audioHandler.getGuildAudioPlayer(guild);
 				if(!guildMusicManager.isPlaying())
 				{
 					event.reply("Nothing is playing").queue();
@@ -130,18 +127,20 @@ public class InputListener extends ListenerAdapter {
 					}
 				});
 				
-				if(msSkip.get() == 0) event.reply("You must skip at least one second").queue();
-				else event.reply(guildMusicManager.forward(msSkip.get())).queue();
+				if(msSkip.get() == 0)
+					event.reply("You must skip at least one second").queue();
+				else
+					event.reply(guildMusicManager.forward(msSkip.get())).queue();
 				return;
 			}
 			case "loop":
 			{
-				event.reply(guildMusicManager.loop(event.getOption("loop").getAsBoolean())).queue();
+				event.reply(audioHandler.getGuildAudioPlayer(guild).loop(event.getOption("loop").getAsBoolean())).queue();
 				return;
 			}
 			case "queue":
 			{
-				event.reply(guildMusicManager.getQueueList()).queue();
+				event.reply(audioHandler.getGuildAudioPlayer(guild).getQueueList()).queue();
 				return;
 			}
 			case "leave":
@@ -155,30 +154,130 @@ public class InputListener extends ListenerAdapter {
 				}
 				else
 				{
-					event.reply(Main.BOT_NAME + " is not in a channel").queue();
+					event.reply(Main.getBotName() + " is not in a channel").queue();
 				}
 				
 				return;
 			}
-			case "clean-up":
+			// Private
+			case "logs":
 			{
-				if(!guild.getSelfMember().hasPermission(event.getGuildChannel(), Permission.MESSAGE_MANAGE, Permission.MESSAGE_HISTORY))
+				// Restrict to bot owner and DMs only
+				if(event.isFromGuild() || !user.getId().equals(ownerID))
 				{
-					event.reply(Main.BOT_NAME + " needs **Manage Messages** and **Read Message History** permissions to clear messages.").setEphemeral(true).queue();
+					event.reply(user.getId().equals(ownerID) ? "Use in DMs" : "Command only accessible to bot owner").setEphemeral(true).queue();
 					return;
 				}
 				
+				switch(event.getSubcommandName())
+				{
+					case "list":
+					{
+						File[] files = getLogFiles();
+						
+						if(files.length == 0)
+						{
+							event.reply("No files found!").queue();
+							return;
+						}
+						
+						StringBuilder builder = new StringBuilder("**Select a file:**\n");
+						
+						for(int i = 0; i < Math.min(files.length, Main.MAX_LOGS); i++)
+						{
+							builder.append("- " + files[i].getName() + "\n");
+						}
+						
+						// If there's more files than normal
+						if(files.length > Main.MAX_LOGS)
+						{
+							builder.append("... and **" + (files.length - Main.MAX_LOGS) + "** more. ");
+						}
+						
+						ICommandReference command = Main.getCommandByName("logs get");
+						builder.append("Pass the filename (and extension) in </" + command.getFullCommandName() + ":" + command.getId() + ">");
+						
+						// Splice just in case
+						String toSend = builder.toString();
+						event.reply(toSend.substring(0, Math.min(toSend.length(), Message.MAX_CONTENT_LENGTH))).queue();
+						break;
+					}
+					case "get":
+					{
+						// Required option
+						String logFile = event.getOption("file", option -> option.getAsString());
+						
+						/* 
+						 * We're doing this the secure way
+						 * Instead of just grabbing new File("/logs" + logIndex), I'm
+						 * iterating through each file in the logs directory and checking
+						 * if the name matches up. That way you can't back traverse
+						 * (even though that should be fine as it's just the operator)
+						 */
+						for(File file : getLogFiles())
+						{
+							if(file.getName().equals(logFile))
+							{
+								event.replyFiles(FileUpload.fromData(file)).queue();
+								return;
+							}
+						}
+						
+						event.reply("`" + logFile + "` was not found in logs").queue();
+						break;
+					}
+					case "clear":
+					{
+						// Don't delete the current log
+						int count = 0;
+						
+						for(File file : getLogFiles())
+						{
+							count++;
+							file.delete();
+						}
+						
+						event.reply("Deleted **" + count + "** logs").queue();
+						break;
+					}
+				}
+				
+				return;
+			}
+			// Both
+			case "clean-up":
+			{
+				if(event.isFromGuild() && !guild.getSelfMember().hasPermission(event.getGuildChannel(), Permission.MESSAGE_MANAGE, Permission.MESSAGE_HISTORY))
+				{
+					event.reply(Main.getBotName() + " needs **Manage Messages** and **Read Message History** permissions to clear messages.").setEphemeral(true).queue();
+					return;
+				}
+				
+				// Private channel
 				handleClearRequest(event.getMessageChannel());
 				event.reply("Clearing " + MAX_CLEARS + "...").setEphemeral(true).queue();
 				return;
 			}
 			default:
 			{
-				System.err.println("Unhandled command " + event.getFullCommandName());
+				Main.log.error("Unhandled command " + event.getFullCommandName());
 				event.reply(Main.ERROR_MESSAGE).setEphemeral(true).queue();
 				return;
 			}
 		}
+	}
+	
+	/**
+	 * @return a potentially empty list of all log files in the logs folder 
+	 */
+	private File[] getLogFiles()
+	{
+		File[] logs = new File("logs").listFiles();
+		if(logs == null) return new File[0];
+		
+		// Sort them by last modified
+		Arrays.sort(logs, (one, two) -> Long.compare(one.lastModified(), two.lastModified()));
+		return logs;
 	}
 	
 	@Override
@@ -197,9 +296,10 @@ public class InputListener extends ListenerAdapter {
 			for(int i = 0; i < messages.size(); i++)
 			{
 				Message sample = messages.get(i);
-				if(sample.isPinned()) continue;
+				if(sample.isPinned())
+					continue;
 				
-				if(sample.getAuthor().getId().equals(Main.BOT_ID))
+				if(sample.getAuthor().getId().equals(Main.getBotName()))
 				{
 					toDelete.add(messages.get(i));
 				}
@@ -207,9 +307,12 @@ public class InputListener extends ListenerAdapter {
 			
 			if(toDelete.size() > 1)
 			{
-				channel.purgeMessages(toDelete).forEach(future -> {
-					future.whenComplete((done, error) -> {
-						if(error != null) {
+				channel.purgeMessages(toDelete).forEach(future ->
+				{
+					future.whenComplete((done, error) ->
+					{
+						if(error != null)
+						{
 							Main.log.error("Failed to delete message", error);
 						}
 					});
