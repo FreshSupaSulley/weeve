@@ -39,6 +39,7 @@ public class Main {
 	
 	public static final Logger log = (Logger) LoggerFactory.getLogger(Main.class);
 	public static final File LOGS_DIR = new File("/logs");
+	public static final File LOG_CURRENT = new File(LOGS_DIR.getAbsolutePath() + "/log-current.log");
 	public static final int MAX_LOGS = 5;
 	
 	public static final String ERROR_MESSAGE = "[**INTERNAL ERROR**] An unknown error has occured. Try again later.";

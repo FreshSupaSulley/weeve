@@ -183,7 +183,8 @@ public class InputListener extends ListenerAdapter {
 						
 						StringBuilder builder = new StringBuilder("**Select a file:**\n");
 						
-						for(int i = 0; i < Math.min(files.length, Main.MAX_LOGS); i++)
+						// Arbitrarily saying only put 20 files here
+						for(int i = 0; i < Math.min(files.length, 20); i++)
 						{
 							builder.append("- " + files[i].getName() + "\n");
 						}
@@ -233,6 +234,12 @@ public class InputListener extends ListenerAdapter {
 						
 						for(File file : getLogFiles())
 						{
+							// Do not remove active log file, it doesn't seem to get regenerated
+							if(file.getName().equals(Main.LOG_CURRENT.getName()))
+							{
+								continue;
+							}
+							
 							count++;
 							file.delete();
 						}
