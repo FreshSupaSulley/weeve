@@ -45,7 +45,17 @@ When you try to play a track for the first time after startup, weeve will ask yo
 | /loop `boolean` | Toggles looping of the playing track. |
 | /queue | Returns all queued songs. |
 | /leave | Leaves the call. |
-| /clean-up | Deletes up to 50 messages sent by the bot. Works in DMs.<br>*\*Requires Manage Messages and Read Message History* |
+| /clean-up | Deletes up to 50 messages sent by the bot.<br>*\*Requires Manage Messages and Read Message History* |
+
+## Operator Commands
+Only available to the bot owner. Used for logging and debugging.
+| Name | Description |
+| --- | --- |
+| /logs list | Lists all log files |
+| /logs get | Gets a log file |
+| /logs clear | Deletes old log files |
+
+**/clean-up** also works here.
 
 # FAQ
 ### Q: I don't know how to make a Discord bot.
