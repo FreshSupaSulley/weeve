@@ -224,7 +224,7 @@ public class InputListener extends ListenerAdapter {
 							}
 						}
 						
-						event.reply("`" + logFile + "` was not found in logs").queue();
+						event.reply("`" + logFile + "` not found").queue();
 						break;
 					}
 					case "clear":
@@ -279,7 +279,7 @@ public class InputListener extends ListenerAdapter {
 	 */
 	private File[] getLogFiles()
 	{
-		File[] logs = new File("logs").listFiles();
+		File[] logs = Main.LOGS_DIR.listFiles();
 		if(logs == null) return new File[0];
 		
 		// Sort them by last modified

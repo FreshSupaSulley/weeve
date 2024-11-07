@@ -38,7 +38,7 @@ import net.dv8tion.jda.internal.JDAImpl;
 public class Main {
 	
 	public static final Logger log = (Logger) LoggerFactory.getLogger(Main.class);
-	public static final File LOGS_DIR = new File("/logs");
+	public static final File LOGS_DIR = new File("logs");
 	public static final File LOG_CURRENT = new File(LOGS_DIR.getAbsolutePath() + "/log-current.log");
 	public static final int MAX_LOGS = 5;
 	
@@ -140,7 +140,7 @@ public class Main {
 				
 				if(notifyErrors)
 				{
-					sendDM(privateChannel, "`notify_errors` enabled. Full details in the logs created in the running directory");
+					sendDM(privateChannel, "`notify_errors` enabled. Full details in the logs created in the running directory (`" + LOGS_DIR.getAbsolutePath() + "`)");
 					
 					// Savior function that catches important errors
 					Thread.setDefaultUncaughtExceptionHandler((thread, throwable) ->
@@ -205,8 +205,8 @@ public class Main {
 		
 		OptionData songRequest = new OptionData(OptionType.STRING, "query", "Search term or link", true);
 		SubcommandData list = new SubcommandData("list", "Lists all log files");
-		SubcommandData get = new SubcommandData("get", "Get a log file").addOption(OptionType.STRING, "file", "Log file name", true);
-		SubcommandData clear = new SubcommandData("clear", "Deletes all log files");
+		SubcommandData get = new SubcommandData("get", "Gets a log file").addOption(OptionType.STRING, "file", "Log file name", true);
+		SubcommandData clear = new SubcommandData("clear", "Deletes old log files");
 		
 		// Public slash commands
 		CommandData[] commands = new CommandData [] {
