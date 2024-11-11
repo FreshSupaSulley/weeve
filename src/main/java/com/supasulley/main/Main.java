@@ -43,8 +43,9 @@ public class Main {
 	public static final int MAX_LOGS = 5;
 	
 	public static final String ERROR_MESSAGE = "[**INTERNAL ERROR**] An unknown error has occured. Try again later.";
-	private static String BOT_NAME;
 	private static List<Command> commands;
+	
+	private static JDA jda;
 	
 	/** True to use the test bot, false for production */
 	private static boolean TEST_BOT = true;
@@ -54,8 +55,10 @@ public class Main {
 	private static final int CONSECUTIVE_INTERVAL = 1000;
 	private static final int DECREASE_RATE = CONSECUTIVE_INTERVAL * 100;
 	
-	private long lastError = System.currentTimeMillis();
-	private int consecutiveErrors;
+	private static long lastError = System.currentTimeMillis();
+	private static int consecutiveErrors;
+	private static String ownerID = null;
+	private static boolean notifyErrors = false;
 	
 	static
 	{
@@ -81,6 +84,9 @@ public class Main {
 	 */
 	public Main(String botToken, String ownerID, boolean notifyErrors)
 	{
+		Main.notifyErrors = notifyErrors;
+		Main.ownerID = ownerID;
+		
 		if(notifyErrors && ownerID == null)
 		{
 			throw new IllegalStateException("notify_errors enabled, but no owner_id provided.");
@@ -123,58 +129,23 @@ public class Main {
 			throw new IllegalStateException("Could not connect to JDA");
 		}
 		
+		Main.jda = jda;
+		
 		try {
 			initialize(jda, ownerID);
 			
 			// Notify if an owner was provided
 			if(ownerID != null)
 			{
-				// Notify of successful launch
-				PrivateChannel privateChannel = jda.retrieveUserById(ownerID).complete().openPrivateChannel().complete();
-				
 				// If DM wasn't successful (hold the program until finished)
-				if(!sendDM(privateChannel, Main.BOT_NAME + " is online (attempts == **" + attempts + "**) running Java " + System.getProperty("java.version")).get())
+				if(!sendToOperator(Main.getBotName() + " is online (attempts == **" + attempts + "**) running Java " + System.getProperty("java.version")).get())
 				{
 					System.err.println("Can't send messages to the owner yet. You need to interact with the bot first. This is a non-fatal error.");
 				}
 				
 				if(notifyErrors)
 				{
-					sendDM(privateChannel, "`notify_errors` enabled. Full details in the logs created in the running directory (`" + LOGS_DIR.getAbsolutePath() + "`)");
-					
-					// Savior function that catches important errors
-					Thread.setDefaultUncaughtExceptionHandler((thread, throwable) ->
-					{
-						log.error(thread.getName(), throwable);
-						
-						// Get time between errors
-						long current = System.currentTimeMillis();
-						long distance = current - lastError;
-						
-						// If this error occurred too soon after the last
-						if(distance < CONSECUTIVE_INTERVAL)
-						{
-							// If the consecutive errors have reached the maximum allowed
-							if(++consecutiveErrors == MAX_CONSECUTIVE_ERRORS)
-							{
-								// Warn the owner that something is definitely wrong
-								sendDM(privateChannel, "Too many consecutive errors. Check logs.");
-							}
-						}
-						// If we haven't had an error in a while
-						else
-						{
-							// 100 seconds needs to pass to decrease consecutive errors by 1
-							consecutiveErrors = Math.max(0, consecutiveErrors = (int) (distance / DECREASE_RATE));
-						}
-						
-						// Only DM the user if we're under the max
-						if(consecutiveErrors < MAX_CONSECUTIVE_ERRORS)
-						{
-							sendDM(privateChannel, "**Error** (" + consecutiveErrors + "/" + MAX_CONSECUTIVE_ERRORS + " consecutive) - " + throwable.getMessage());
-							lastError = System.currentTimeMillis();
-						}
-					});
+					sendToOperator("`notify_errors` enabled. Full details in the logs created in the running directory (`" + LOGS_DIR.getAbsolutePath() + "`)");
 				}
 			}
 		} catch(Throwable t) {
@@ -184,12 +155,79 @@ public class Main {
 		}
 	}
 	
-	private CompletableFuture<Boolean> sendDM(PrivateChannel channel, String text)
+	/**
+	 * Logs an error and sends to operator if enabled.
+	 * 
+	 * @param throwable the error to log
+	 */
+	public static void error(Throwable throwable)
 	{
-		return channel.sendMessage(text).submit().handleAsync((message, throwable) ->
+		Main.error(throwable.getMessage(), throwable);
+	}
+	
+	/**
+	 * Logs an error and sends to operator if enabled.
+	 * 
+	 * @param summary   summary of the error
+	 * @param throwable the error to log
+	 */
+	public static void error(String summary, Throwable error)
+	{
+		// Log the error
+		Main.log.error(Thread.currentThread().getName(), error);
+		
+		// Don't send to operator if notify errors aren't enabled
+		if(!notifyErrors) return;
+		
+		// Get time between errors
+		long current = System.currentTimeMillis();
+		long distance = current - Main.lastError;
+		
+		// If this error occurred too soon after the last
+		if(distance < CONSECUTIVE_INTERVAL)
 		{
-			return throwable == null;
-		});
+			// If the consecutive errors have reached the maximum allowed
+			if(++Main.consecutiveErrors == MAX_CONSECUTIVE_ERRORS)
+			{
+				// Warn the owner that something is definitely wrong
+				sendToOperator("Too many consecutive errors. Check logs.");
+			}
+		}
+		// If we haven't had an error in a while
+		else
+		{
+			// 100 seconds needs to pass to decrease consecutive errors by 1
+			Main.consecutiveErrors = Math.max(0, Main.consecutiveErrors = (int) (distance / DECREASE_RATE));
+		}
+		
+		// Only DM the user if we're under the max
+		if(Main.consecutiveErrors < MAX_CONSECUTIVE_ERRORS)
+		{
+			sendToOperator("**Error** (" + Main.consecutiveErrors + "/" + MAX_CONSECUTIVE_ERRORS + " consecutive) - " + summary);
+			Main.lastError = System.currentTimeMillis();
+		}
+	}
+	
+	/**
+	 * Sends a DM to the operator for error logging. Requires owner ID to be set.
+	 * 
+	 * @param text message to send
+	 * @return {@linkplain CompletableFuture} promise returning true if successful, false otherwise
+	 */
+	private static CompletableFuture<Boolean> sendToOperator(String text)
+	{
+		// Notfy owner if enabled
+		if(Main.ownerID != null)
+		{
+			PrivateChannel channel = jda.retrieveUserById(ownerID).complete().openPrivateChannel().complete();
+			
+			return channel.sendMessage(text).submit().handleAsync((message, throwable) ->
+			{
+				return throwable == null;
+			});
+		}
+		
+		return CompletableFuture.completedFuture(false);
 	}
 	
 	/**
@@ -201,7 +239,6 @@ public class Main {
 	private void initialize(JDA jda, String ownerID)
 	{
 		jda.getPresence().setPresence(Activity.of(ActivityType.PLAYING, "music"), false);
-		BOT_NAME = jda.getSelfUser().getName();
 		
 		OptionData songRequest = new OptionData(OptionType.STRING, "query", "Search term or link", true);
 		SubcommandData list = new SubcommandData("list", "Lists all log files");
@@ -263,7 +300,12 @@ public class Main {
 	
 	public static String getBotName()
 	{
-		return Main.BOT_NAME;
+		return jda.getSelfUser().getName();
+	}
+	
+	public static String getBotID()
+	{
+		return jda.getSelfUser().getId();
 	}
 	
 	private static String loadAsString(InputStream stream) throws IOException

@@ -8,6 +8,7 @@ import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
+import com.supasulley.main.Main;
 
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
@@ -22,10 +23,9 @@ public class GuildMusicManager extends AudioEventAdapter {
 	
 	// Scheduler
 	private final LinkedBlockingDeque<AudioRequest> queue;
-	private AudioRequest currentRequest;
 	private boolean loop;
 	
-	private long lastPlay;
+	/** Stores the last channel someone sent a message in */
 	private MessageChannel messageChannel;
 	
 	public GuildMusicManager(AudioPlayerManager manager)
@@ -40,8 +40,6 @@ public class GuildMusicManager extends AudioEventAdapter {
 	@Override
 	public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason)
 	{
-		lastPlay = System.currentTimeMillis();
-		
 		// Only start the next track if the end reason is suitable for it (FINISHED or LOAD_FAILED)
 		if(endReason.mayStartNext)
 		{
@@ -61,8 +59,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 	@Override
 	public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception)
 	{
-		System.err.println("Error loading <" + track.getInfo().uri + ">");
-		sendToOrigin("Error loading " + new RequestInfoBuilder().bold().apply(track) + " [(link)](<" + track.getInfo().uri + ">):\n`" + exception.getMessage() + "`");
+		Main.error("Error loading <" + track.getInfo().uri + ">", exception);
+		sendToOrigin("Error loading " + new RequestInfoBuilder().bold().apply(track) + " [(link)](<" + track.getInfo().uri + ">): `" + exception.getMessage() + "`");
 		nextTrack();
 	}
 	
@@ -76,13 +74,11 @@ public class GuildMusicManager extends AudioEventAdapter {
 	public void queue(boolean playNext, AudioRequest track, MessageChannel textChannel)
 	{
 		this.messageChannel = textChannel;
-		lastPlay = System.currentTimeMillis();
 		
 		// If queue is empty, immediately start it. Otherwise, add to queue
 		if(player.startTrack(track.getAudioTrack(), true))
 		{
 			track.openAudioConnection();
-			currentRequest = track;
 		}
 		else if(playNext)
 		{
@@ -108,12 +104,10 @@ public class GuildMusicManager extends AudioEventAdapter {
 		if(next == null)
 		{
 			player.startTrack(null, false);
-			currentRequest = null;
 		}
 		else
 		{
 			player.startTrack(next.getAudioTrack(), false);
-			currentRequest = next;
 			next.openAudioConnection();
 		}
 		
@@ -210,13 +204,13 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		StringBuilder builder = new StringBuilder();
 		
-		if(currentRequest == null)
+		if(queue.isEmpty())
 		{
 			builder.append("The queue is empty");
 		}
 		else
 		{
-			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(currentRequest.getAudioTrack()));
+			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(getCurrentRequest().getAudioTrack()));
 			
 			if(!queue.isEmpty())
 			{
@@ -260,7 +254,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public boolean isPlaying()
 	{
-		return player.getPlayingTrack() != null ? true : false;
+		return !queue.isEmpty();
+//		return player.getPlayingTrack() != null ? true : false;
 	}
 	
 	/**
@@ -268,7 +263,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public AudioRequest getCurrentRequest()
 	{
-		return currentRequest;
+		return queue.peek();
 	}
 	
 	/**
@@ -303,7 +298,6 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		queue.clear();
 		player.startTrack(null, false);
-		currentRequest = null;
 		loop = false;
 	}
 	
@@ -313,14 +307,6 @@ public class GuildMusicManager extends AudioEventAdapter {
 	public AudioPlayerSendHandler getSendHandler()
 	{
 		return sendHandler;
-	}
-	
-	/**
-	 * @return time last track was queued
-	 */
-	public long timeSinceLastRequest()
-	{
-		return System.currentTimeMillis() - lastPlay;
 	}
 	
 	public void sendToOrigin(String message)

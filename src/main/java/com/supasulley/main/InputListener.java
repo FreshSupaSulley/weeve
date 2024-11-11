@@ -1,9 +1,7 @@
 package com.supasulley.main;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.supasulley.music.AudioHandler;
@@ -15,7 +13,6 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildVoiceState;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
-import net.dv8tion.jda.api.entities.MessageHistory;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
@@ -60,6 +57,17 @@ public class InputListener extends ListenerAdapter {
 	
 	@Override
 	public void onSlashCommandInteraction(SlashCommandInteractionEvent event)
+	{
+		// There's a lot of difficulty trying to create a global exception handler
+		// This is the best I can do right now
+		try {
+			handleSlashCommand(event);
+		} catch(Throwable t) {
+			Main.error(t);
+		}
+	}
+	
+	private void handleSlashCommand(SlashCommandInteractionEvent event)
 	{
 		// Message content
 		String content = event.getCommandString();
@@ -208,12 +216,9 @@ public class InputListener extends ListenerAdapter {
 						// Required option
 						String logFile = event.getOption("file", option -> option.getAsString());
 						
-						/* 
-						 * We're doing this the secure way
-						 * Instead of just grabbing new File("/logs" + logIndex), I'm
-						 * iterating through each file in the logs directory and checking
-						 * if the name matches up. That way you can't back traverse
-						 * (even though that should be fine as it's just the operator)
+						/*
+						 * We're doing this the secure way Instead of just grabbing new File("/logs" + logIndex), I'm iterating through each file in the logs directory and checking if
+						 * the name matches up. That way you can't back traverse (even though that should be fine as it's just the operator)
 						 */
 						for(File file : getLogFiles())
 						{
@@ -274,6 +279,11 @@ public class InputListener extends ListenerAdapter {
 		}
 	}
 	
+	private void handleClearRequest(MessageChannel channel)
+	{
+		channel.getIterableHistory().takeWhileAsync(MAX_CLEARS, rule -> rule.getAuthor().getId().equals(Main.getBotID())).thenAccept(channel::purgeMessages);
+	}
+	
 	/**
 	 * @return a potentially empty list of all log files in the logs folder 
 	 */
@@ -293,92 +303,45 @@ public class InputListener extends ListenerAdapter {
 		audioHandler.handleButtonPress(event);
 	}
 	
-	private void handleClearRequest(MessageChannel channel)
-	{
-		MessageHistory history = new MessageHistory(channel);
-		history.retrievePast(MAX_CLEARS).queue(messages ->
-		{
-			List<Message> toDelete = new ArrayList<Message>();
-			
-			for(int i = 0; i < messages.size(); i++)
-			{
-				Message sample = messages.get(i);
-				if(sample.isPinned())
-					continue;
-				
-				if(sample.getAuthor().getId().equals(Main.getBotName()))
-				{
-					toDelete.add(messages.get(i));
-				}
-			}
-			
-			if(toDelete.size() > 1)
-			{
-				channel.purgeMessages(toDelete).forEach(future ->
-				{
-					future.whenComplete((done, error) ->
-					{
-						if(error != null)
-						{
-							Main.log.error("Failed to delete message", error);
-						}
-					});
-				});
-			}
-			else if(toDelete.size() != 0)
-			{
-				toDelete.get(0).delete().queue();
-			}
-		});
-	}
-	
-	@Override
-	public void onGatewayPing(GatewayPingEvent event)
-	{
-		// Make sure we're not in a call by ourselves
-		audioHandler.tick(event.getJDA());
-	}
+	// Assuming onGuildVoiceUpdate works as intended this shouldn't be necessary anymore
+//	@Override
+//	public void onGatewayPing(GatewayPingEvent event)
+//	{
+//		// Make sure we're not in a call by ourselves
+//		audioHandler.tick(event.getJDA());
+//	}
 	
 	@Override
 	public void onGuildVoiceUpdate(GuildVoiceUpdateEvent event)
 	{
 		Guild guild = event.getGuild();
 		
+		// If someone left
 		if(event.getChannelLeft() != null)
 		{
 			GuildMusicManager manager = audioHandler.getGuildAudioPlayer(guild);
+			GuildVoiceState state = guild.getSelfMember().getVoiceState();
 			
-			if(manager.isPlaying())
+			if(state.inAudioChannel())
 			{
-				AudioChannel audioChannel = manager.getCurrentRequest().getAudioChannel();
-				// If we are playing music in the same channel as the person who left
-				// This is better than using the AudioManager because it's apparently unreliable for async reasons
-				if(audioChannel.getIdLong() == event.getChannelLeft().getIdLong())
+				AudioChannel channel = state.getChannel();
+				int nonBots = 0;
+				
+				// Count all bot users
+				for(Member member : channel.getMembers())
 				{
-					GuildVoiceState state = guild.getSelfMember().getVoiceState();
-					
-					if(state.inAudioChannel())
+					if(!member.getUser().isBot())
 					{
-						AudioChannel channel = state.getChannel();
-						int nonBots = 0;
-						
-						// Count all bot users
-						for(Member member : channel.getMembers())
-						{
-							if(!member.getUser().isBot())
-							{
-								nonBots++;
-							}
-						}
-						
-						// If the channel is now empty
-						if(nonBots == 0)
-						{
-							// Leave the call
-							manager.sendToOrigin("All users left **" + MarkdownSanitizer.sanitize(channel.getName()) + "**");
-							audioHandler.leaveCall(guild);
-						}
+						nonBots++;
 					}
+				}
+				
+				// If the channel is now empty
+				if(nonBots == 0)
+				{
+					// Leave the call
+					manager.sendToOrigin("All users left **" + MarkdownSanitizer.sanitize(channel.getName()) + "**");
+					audioHandler.leaveCall(guild);
 				}
 			}
 		}
@@ -401,26 +364,26 @@ public class InputListener extends ListenerAdapter {
 	{
 		disconnected = System.currentTimeMillis();
 		CloseCode code = event.getCloseCode();
-		System.out.println("DISCONNECTED! Close code: " + (code == null ? "null" : code.getCode() + ". Meaning: " + code.getMeaning()) + ". Closed by discord: " + event.isClosedByServer());
+		Main.log.info("DISCONNECTED! Close code: " + (code == null ? "null" : code.getCode() + ". Meaning: " + code.getMeaning()) + ". Closed by discord: " + event.isClosedByServer());
 	}
 	
 	@Override
 	public void onSessionResume(SessionResumeEvent event)
 	{
-		System.out.println("Reconnected!");
+		Main.log.info("Reconnected!");
 		
 		long notifyTime = 60000;
 		long disconnectTime = System.currentTimeMillis() - disconnected;
 		
 		if(disconnectTime > notifyTime)
 		{
-			System.out.println("Bot was disconnected for " + disconnectTime / 1000 + " seconds");
+			Main.log.info("Bot was disconnected for " + disconnectTime / 1000 + " seconds");
 		}
 	}
 	
 	@Override
 	public void onException(ExceptionEvent event)
 	{
-		System.err.println("JDA Exception! Code: " + event.getResponseNumber() + ". Logged: " + event.isLogged() + ". Cause: " + event.getCause());
+		Main.error(event.getCause());
 	}
 }
