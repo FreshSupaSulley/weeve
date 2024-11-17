@@ -4,6 +4,8 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.supasulley.music.AudioHandler;
 import com.supasulley.music.GuildMusicManager;
 
@@ -17,7 +19,6 @@ import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.ExceptionEvent;
-import net.dv8tion.jda.api.events.GatewayPingEvent;
 import net.dv8tion.jda.api.events.guild.GuildLeaveEvent;
 import net.dv8tion.jda.api.events.guild.UnavailableGuildLeaveEvent;
 import net.dv8tion.jda.api.events.guild.voice.GuildVoiceUpdateEvent;
@@ -83,29 +84,29 @@ public class InputListener extends ListenerAdapter {
 		{
 			case "play":
 			{
-				audioHandler.handleSongRequest(AudioHandler.ButtonCode.PLAY_NOW, user.getIdLong(), event);
+				audioHandler.handleSongRequest(event.getOption("source", AudioSource.SOUNDCLOUD, (option) -> AudioSource.valueOf(option.getAsString())), event.getOption("next", false, option -> option.getAsBoolean()), user.getIdLong(), event);
 				return;
 			}
-			case "next":
+			case "ytcookies":
 			{
-				audioHandler.handleSongRequest(AudioHandler.ButtonCode.PLAY_NEXT, user.getIdLong(), event);
+				audioHandler.supplyYTCookies(event.getOption("cookies", OptionMapping::getAsString), event);
 				return;
 			}
 			case "skip":
 			{
 				int songs = event.getOption("amount", 1, OptionMapping::getAsInt);
-				event.reply(audioHandler.getGuildAudioPlayer(guild).skipTracks(songs)).queue();
+				event.reply(audioHandler.getGuildMusicManager(guild).skipTracks(songs)).queue();
 				return;
 			}
 			case "stop":
 			{
-				audioHandler.getGuildAudioPlayer(guild).reset();
+				audioHandler.getGuildMusicManager(guild).reset();
 				event.reply("Stopped playback").queue();
 				return;
 			}
 			case "forward":
 			{
-				GuildMusicManager guildMusicManager = audioHandler.getGuildAudioPlayer(guild);
+				GuildMusicManager guildMusicManager = audioHandler.getGuildMusicManager(guild);
 				if(!guildMusicManager.isPlaying())
 				{
 					event.reply("Nothing is playing").queue();
@@ -143,12 +144,12 @@ public class InputListener extends ListenerAdapter {
 			}
 			case "loop":
 			{
-				event.reply(audioHandler.getGuildAudioPlayer(guild).loop(event.getOption("loop").getAsBoolean())).queue();
+				event.reply(audioHandler.getGuildMusicManager(guild).loop(event.getOption("loop").getAsBoolean())).queue();
 				return;
 			}
 			case "queue":
 			{
-				event.reply(audioHandler.getGuildAudioPlayer(guild).getQueueList()).queue();
+				event.reply(audioHandler.getGuildMusicManager(guild).getQueueList()).queue();
 				return;
 			}
 			case "leave":
@@ -319,7 +320,7 @@ public class InputListener extends ListenerAdapter {
 		// If someone left
 		if(event.getChannelLeft() != null)
 		{
-			GuildMusicManager manager = audioHandler.getGuildAudioPlayer(guild);
+			GuildMusicManager manager = audioHandler.getGuildMusicManager(guild);
 			GuildVoiceState state = guild.getSelfMember().getVoiceState();
 			
 			if(state.inAudioChannel())

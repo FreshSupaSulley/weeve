@@ -8,7 +8,7 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 - [ ] Free cloud hosting service
 - [ ] Scalable
 
-**weeve is a bot engine, not a bot**. You make a bot and weeve runs it.
+**weeve is a bot engine, not a bot**. You run your own bot on weeve.
 
 # Setup
 >[!NOTE]
@@ -29,20 +29,20 @@ weeve runs on Java 11, which should be backwards compatible with newer versions.
    ```
    weeve will read the *tokens.json* file in the working directory and use it to run your bot. Allow a few minutes before restarting Discord for the slash commands to appear.
 
-# Link with Google
-When you try to play a track for the first time after startup, weeve will ask you to link a Google account. Paste the generated code into the Google login link it provides and you're good to go.
+# Linking to YouTube
+Thanks to Google's war against bots on YouTube, support for YouTube videos are (currently) cutting-edge. Since YouTube TV OAuth no longer works, you need to provide a `po-token` and `visitor-data` to connect to YouTube. If you chose to not provide a YouTube token, the bot runs on SoundCloud by default.
 
 > [!WARNING]
-> I **strongly recommend** you use a burner account to link with Google. Although unlikely, your bot may get flagged and you risk getting your Google account banned. Visit [YouTube Plugin](https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-oauth-tokens) for details.
+> I **strongly recommend** you use a burner account to link with Google. The account used to generated tokens may get flagged and you risk getting your Google account banned. Visit [YouTube Plugin](https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-a-potoken) for details.
 
 # Commands
 | Name | Description |
 | --- | --- |
-| /play `query` | Plays a URL, or searches YouTube with a query. |
-| /skip `amount` | Skips the playing song, or an optional number of tracks. |
-| /next `query` | Plays a song next, skipping the queue. |
+| /play `**string**: query` | Plays a URL, or searches with a query. |
+| /yttoken `**string**: po-token` `**string**: visitor-data` | Globally links the bot up to YouTube across all servers, enabling YouTube support. |
+| /skip `**integer**: amount` `*optional* **boolean**: next` | Skips the playing song, or an optional number of tracks. Includes option to skip the queue and play next. |
 | /reset | Stops playback and empties the queue. |
-| /loop `boolean` | Toggles looping of the playing track. |
+| /loop `**boolean**: loop` | Toggles looping of the playing track. |
 | /queue | Returns all queued songs. |
 | /leave | Leaves the call. |
 | /clean-up | Deletes up to 50 messages sent by the bot.<br>*\*Requires Manage Messages and Read Message History* |

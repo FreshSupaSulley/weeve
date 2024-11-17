@@ -1,5 +1,8 @@
 package com.supasulley.music;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
@@ -28,13 +31,37 @@ public class GuildMusicManager extends AudioEventAdapter {
 	/** Stores the last channel someone sent a message in */
 	private MessageChannel messageChannel;
 	
+	private Map<String, List<AudioTrack>> requestMap;
+	
 	public GuildMusicManager(AudioPlayerManager manager)
 	{
 		this.player = manager.createPlayer();
 		this.player.addListener(this);
 		this.sendHandler = new AudioPlayerSendHandler(player);
-		
 		this.queue = new LinkedBlockingDeque<AudioRequest>();
+		this.requestMap = new HashMap<String, List<AudioTrack>>();
+	}
+	
+	/**
+	 * Adds an {@linkplain AudioTrack} list representing the options for a play request.
+	 * 
+	 * @param messageID message ID of the selection
+	 * @param track     list of audio track options of this request
+	 */
+	public void addRequest(String messageID, List<AudioTrack> track)
+	{
+		requestMap.put(messageID, track);
+	}
+	
+	/**
+	 * Gets and removes the list of {@linkplain AudioTrack} options associated with this message ID.
+	 * 
+	 * @param messageID message ID of the selection
+	 * @return list of audio track options of this request, or null if the request wasn't found
+	 */
+	public List<AudioTrack> getAudioTrack(String messageID)
+	{
+		return requestMap.remove(messageID);
 	}
 	
 	@Override
@@ -204,13 +231,13 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		StringBuilder builder = new StringBuilder();
 		
-		if(queue.isEmpty())
+		if(!isPlaying())
 		{
 			builder.append("The queue is empty");
 		}
 		else
 		{
-			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(getCurrentRequest().getAudioTrack()));
+			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(getCurrentRequest()));
 			
 			if(!queue.isEmpty())
 			{
@@ -254,16 +281,17 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public boolean isPlaying()
 	{
-		return !queue.isEmpty();
-//		return player.getPlayingTrack() != null ? true : false;
+//		return !queue.isEmpty();
+		return player.getPlayingTrack() != null;
 	}
 	
 	/**
 	 * @return currently playing {@link AudioRequest}, or null if nothing is playing
 	 */
-	public AudioRequest getCurrentRequest()
+	public AudioTrack getCurrentRequest()
 	{
-		return queue.peek();
+		return player.getPlayingTrack();
+//		return queue.peek();
 	}
 	
 	/**
@@ -296,6 +324,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public void reset()
 	{
+		requestMap.clear();
 		queue.clear();
 		player.startTrack(null, false);
 		loop = false;

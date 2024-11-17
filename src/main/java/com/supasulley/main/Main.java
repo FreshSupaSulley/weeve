@@ -240,16 +240,23 @@ public class Main {
 	{
 		jda.getPresence().setPresence(Activity.of(ActivityType.PLAYING, "music"), false);
 		
-		OptionData songRequest = new OptionData(OptionType.STRING, "query", "Search term or link", true);
 		SubcommandData list = new SubcommandData("list", "Lists all log files");
 		SubcommandData get = new SubcommandData("get", "Gets a log file").addOption(OptionType.STRING, "file", "Log file name", true);
 		SubcommandData clear = new SubcommandData("clear", "Deletes old log files");
 		
+		OptionData source = new OptionData(OptionType.STRING, "source", "Audio source");
+		
+		for(AudioSource sample : AudioSource.values())
+		{
+			source.addChoice(sample.getFancyName(), sample.name());
+		}
+		
 		// Public slash commands
 		CommandData[] commands = new CommandData [] {
 			// Public
-			Commands.slash("play", "Play a song").addOptions(songRequest).setGuildOnly(true),
-			Commands.slash("next", "Forces a song to play next").addOptions(songRequest).setGuildOnly(true),
+			Commands.slash("play", "Play a song").addOption(OptionType.STRING, "query", "Search term or link", true).addOptions(source).addOption(OptionType.BOOLEAN, "next", "Plays this track next").setGuildOnly(true),
+//			Commands.slash("ytcookies", "Supply YouTube cookies").addOption(OptionType.STRING, "cookies", "Exported YouTube cookies", true).setGuildOnly(true),
+//			Commands.slash("next", "Forces a song to play next").addOptions(songRequest).setGuildOnly(true),
 			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)).setGuildOnly(true),
 			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)).setGuildOnly(true),
 			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)).setGuildOnly(true),
@@ -264,12 +271,9 @@ public class Main {
 			Commands.slash("clean-up", "Deletes commands")
 		};
 		
-		// Delete commands
-//		jda.retrieveCommands().complete().forEach(hi -> hi.delete().complete());
-//		System.out.println("done");
-		
 		// Update public commands
-		System.out.println("Updating slash commands");
+		// "When a command is not listed in this request, it will be deleted." Don't need to worry about old commands
+		Main.log.info("Updating slash commands");
 		Main.commands = jda.updateCommands().addCommands(commands).complete();
 		
 		// Create InputListener
