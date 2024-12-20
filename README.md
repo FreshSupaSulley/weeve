@@ -101,3 +101,6 @@ weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to conn
 
 # Contributing
 Feel free to do whatever you want with this repository. If you find a bug, please open an issue with the logs attached.
+
+# Future
+- Maybe make weeve simulate a full web browser environment and harvest the audio stream from it? Like Chromium?

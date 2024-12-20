@@ -24,6 +24,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 	private final AudioPlayer player;
 	private final AudioPlayerSendHandler sendHandler;
 	
+	private long leaveTime;
+	
 	// Scheduler
 	private final LinkedBlockingDeque<AudioRequest> queue;
 	private boolean loop;
@@ -40,6 +42,14 @@ public class GuildMusicManager extends AudioEventAdapter {
 		this.sendHandler = new AudioPlayerSendHandler(player);
 		this.queue = new LinkedBlockingDeque<AudioRequest>();
 		this.requestMap = new HashMap<String, List<AudioTrack>>();
+	}
+	
+	/**
+	 * @return time (millis) when the bot should leave the call.
+	 */
+	public long getLeaveTime()
+	{
+		return leaveTime;
 	}
 	
 	/**
@@ -67,6 +77,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 	@Override
 	public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason)
 	{
+		leaveTime = System.currentTimeMillis() + AudioHandler.IDLE_TIME;
+		
 		// Only start the next track if the end reason is suitable for it (FINISHED or LOAD_FAILED)
 		if(endReason.mayStartNext)
 		{
@@ -100,6 +112,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public void queue(boolean playNext, AudioRequest track, MessageChannel textChannel)
 	{
+		leaveTime = 0;
 		this.messageChannel = textChannel;
 		
 		// If queue is empty, immediately start it. Otherwise, add to queue
@@ -342,12 +355,12 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		if(messageChannel != null)
 		{
-			System.out.println("Sending \"" + message + "\" to voice request origin");
+			Main.log.error("Sending \"{}\" to voice request origin", message);
 			messageChannel.sendMessage(message).queue();
 		}
 		else
 		{
-			System.out.println("This isn't supposed to happen :( messageChannel is null, tried to send " + message);
+			Main.log.error("This isn't supposed to happen :( messageChannel is null, tried to send {}", message);
 		}
 	}
 }

@@ -3,8 +3,10 @@ package com.supasulley.music;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -28,6 +30,7 @@ import com.supasulley.main.Main;
 
 import dev.lavalink.youtube.YoutubeAudioSourceManager;
 import dev.lavalink.youtube.clients.Web;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
@@ -42,7 +45,7 @@ import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
 public class AudioHandler {
 	
 	// 1 hour before the bot leaves
-//	private static final long IDLE_TIME = 60 * 1000 * 60;
+	public static final long IDLE_TIME = 60 * 1000 * 60;
 	
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
@@ -56,7 +59,8 @@ public class AudioHandler {
 		
 		// Add the default support for SoundCloud, Vimeo, etc. AND the YouTube plugin
 		AudioSourceManagers.registerRemoteSources(playerManager);
-		playerManager.registerSourceManager(ytManager = new YoutubeAudioSourceManager(ytWebClient = new Web()));
+		playerManager.registerSourceManager(new PlaywrightSourceManager());
+		playerManager.registerSourceManager(ytManager = new YoutubeAudioSourceManager(ytWebClient = new Web(), new PlaywrightClient()));
 		
 		this.musicManagers = new HashMap<Long, GuildMusicManager>();
 		
@@ -102,7 +106,7 @@ public class AudioHandler {
 						}
 						default:
 						{
-							System.out.println("Unknown cookie property: " + key);
+							Main.log.warn("Unknown cookie property {}", key);
 							break;
 						}
 					}
@@ -227,7 +231,7 @@ public class AudioHandler {
 		
 		if(selections == null)
 		{
-			event.deferEdit().setComponents().setContent("This event has expired. Try </play:" + Main.getCommandByName("play").getId() + "> again.").queue();
+			event.deferEdit().setComponents().setContent("This event has expired. Try " + Main.getCommandReference("play") + " again.").queue();
 			return;
 		}
 		
@@ -383,30 +387,31 @@ public class AudioHandler {
 		return (hours != 0 ? String.format("%01d", hours) + ":" : "") + String.format("%0" + (hours == 0 ? "1" : "2") + "d", minutes) + ":" + String.format("%02d", seconds);
 	}
 	
-//	public void tick(JDA jda)
-//	{
-//		Iterator<Entry<Long, GuildMusicManager>> iterator = musicManagers.entrySet().iterator();
-//		
-//		while(iterator.hasNext())
-//		{
-//			Entry<Long, GuildMusicManager> entry = iterator.next();
-//			GuildMusicManager manager = entry.getValue();
-//			
-//			// If this manager isn't playing anything AND it's been a fat sec since we've had to handle a request
-//			if(!manager.isPlaying() && manager.timeSinceLastRequest() > IDLE_TIME)
-//			{
-//				// Check if the channel is empty
-//				Guild guild = jda.getGuildById(entry.getKey());
-//				
-//				if(guild != null && guild.getAudioManager().isConnected())
-//				{
-//					// Check if its been a while since the last command
-//					manager.sendToOrigin("Left due to inactivity");
-//					guild.getAudioManager().closeAudioConnection();
-//				}
-//				
-//				iterator.remove();
-//			}
-//		}
-//	}
+	public void tick(JDA jda)
+	{
+		Iterator<Entry<Long, GuildMusicManager>> iterator = musicManagers.entrySet().iterator();
+		
+		while(iterator.hasNext())
+		{
+			Entry<Long, GuildMusicManager> entry = iterator.next();
+			GuildMusicManager manager = entry.getValue();
+			
+			// If this manager isn't playing anything AND it's been a fat sec since we've had to handle a request
+			// manager.getLeaveTime() != 0 is likely redundant
+			if(!manager.isPlaying() && manager.getLeaveTime() != 0 && System.currentTimeMillis() > manager.getLeaveTime())
+			{
+				// Check if the channel is empty
+				Guild guild = jda.getGuildById(entry.getKey());
+				
+				if(guild != null && guild.getAudioManager().isConnected())
+				{
+					// Check if its been a while since the last command
+					manager.sendToOrigin("Left due to inactivity");
+					guild.getAudioManager().closeAudioConnection();
+				}
+				
+				iterator.remove();
+			}
+		}
+	}
 }
