@@ -16,6 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDA.Status;
@@ -32,15 +34,12 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
-import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
+import net.dv8tion.jda.api.requests.restaction.CommandListUpdateAction;
 import net.dv8tion.jda.internal.JDAImpl;
 
 public class Main {
 	
 	public static final Logger log = (Logger) LoggerFactory.getLogger(Main.class);
-	public static final File LOGS_DIR = new File("logs");
-	public static final File LOG_CURRENT = new File(LOGS_DIR.getAbsolutePath() + "/log-current.log");
-	public static final int MAX_LOGS = 5;
 	
 	public static final String ERROR_MESSAGE = "[**INTERNAL ERROR**] An unknown error has occured. Try again later.";
 	private static List<Command> commands;
@@ -67,13 +66,7 @@ public class Main {
 		if(resource.startsWith("jar:") || resource.startsWith("rsrc:"))
 			TEST_BOT = false;
 		
-		// Print uncaught exceptions to the logs instead of the console
-		Thread.setDefaultUncaughtExceptionHandler((thread, throwable) ->
-		{
-			log.error(thread.getName(), throwable);
-		});
-		
-		log.info("PROGRAM START at " + System.currentTimeMillis());
+		log.info("weeve start at {}", System.currentTimeMillis());
 	}
 	
 	/**
@@ -112,7 +105,7 @@ public class Main {
 				
 				// Wait until we try again
 				try {
-					System.out.println("Failed to connect to JDA. Retrying in 30s...");
+					log.warn("Failed to connect to JDA. Retrying in 30s...");
 					Thread.sleep(30000);
 				} catch(InterruptedException e) {
 					e.printStackTrace();
@@ -132,25 +125,19 @@ public class Main {
 		Main.jda = jda;
 		
 		try {
-			initialize(jda, ownerID);
+			initialize(jda, notifyErrors);
 			
 			// Notify if an owner was provided
 			if(ownerID != null)
 			{
 				// If DM wasn't successful (hold the program until finished)
-				if(!sendToOperator(Main.getBotName() + " is online (attempts == **" + attempts + "**) running Java " + System.getProperty("java.version")).get())
+				if(!sendToOperator(Main.getBotName() + " is online (attempts == **" + attempts + "**) running Java " + System.getProperty("java.version") + (notifyErrors ? " with `notify_errors` enabled" : "")).get())
 				{
-					System.err.println("Can't send messages to the owner yet. You need to interact with the bot first. This is a non-fatal error.");
-				}
-				
-				if(notifyErrors)
-				{
-					sendToOperator("`notify_errors` enabled. Full details in the logs created in the running directory (`" + LOGS_DIR.getAbsolutePath() + "`)");
+					log.error("Can't send messages to the owner yet. You need to interact with the bot first. This is a non-fatal error.");
 				}
 			}
 		} catch(Throwable t) {
-			System.err.println("An error occured initializing InputListener");
-			t.printStackTrace();
+			log.error("A fatal error occured initializing InputListener", t);
 			System.exit(1);
 		}
 	}
@@ -158,24 +145,45 @@ public class Main {
 	/**
 	 * Logs an error and sends to operator if enabled.
 	 * 
-	 * @param throwable the error to log
+	 * @param summary summary of the error
 	 */
-	public static void error(Throwable throwable)
+	public static void error(String summary)
 	{
-		Main.error(throwable.getMessage(), throwable);
+		log.error(summary);
+		Main.forwardError(summary);
 	}
 	
 	/**
 	 * Logs an error and sends to operator if enabled.
 	 * 
-	 * @param summary   summary of the error
-	 * @param throwable the error to log
+	 * @param summary summary of the error
+	 * @param error   the error to log
 	 */
 	public static void error(String summary, Throwable error)
 	{
-		// Log the error
-		Main.log.error(Thread.currentThread().getName(), error);
-		
+		log.error(summary, error);
+		Main.forwardError(summary);
+	}
+	
+	/**
+	 * Logs an error and sends to operator if enabled.
+	 * 
+	 * @param error the error to log
+	 */
+	public static void error(Throwable error)
+	{
+		log.error("An error occurred", error);
+		Main.forwardError(error.getMessage());
+	}
+	
+	/**
+	 * Sends errors to operator if enabled.
+	 * 
+	 * @param summary   summary of the error
+	 * @param throwable the error to log
+	 */
+	private static void forwardError(String summary)
+	{
 		// Don't send to operator if notify errors aren't enabled
 		if(!notifyErrors) return;
 		
@@ -236,20 +244,23 @@ public class Main {
 	 * @param jda     connected JDA instance
 	 * @param ownerID optional ID of owner
 	 */
-	private void initialize(JDA jda, String ownerID)
+	private void initialize(JDA jda, boolean notifyErrors)
 	{
 		jda.getPresence().setPresence(Activity.of(ActivityType.PLAYING, "music"), false);
 		
-		OptionData songRequest = new OptionData(OptionType.STRING, "query", "Search term or link", true);
-		SubcommandData list = new SubcommandData("list", "Lists all log files");
-		SubcommandData get = new SubcommandData("get", "Gets a log file").addOption(OptionType.STRING, "file", "Log file name", true);
-		SubcommandData clear = new SubcommandData("clear", "Deletes old log files");
+		OptionData source = new OptionData(OptionType.STRING, "source", "Audio source");
+		
+		for(AudioSource sample : AudioSource.values())
+		{
+			source.addChoice(sample.getFancyName(), sample.name());
+		}
 		
 		// Public slash commands
 		CommandData[] commands = new CommandData [] {
 			// Public
-			Commands.slash("play", "Play a song").addOptions(songRequest).setGuildOnly(true),
-			Commands.slash("next", "Forces a song to play next").addOptions(songRequest).setGuildOnly(true),
+			Commands.slash("play", "Play a song").addOption(OptionType.STRING, "query", "Search term or link", true).addOptions(source).addOption(OptionType.BOOLEAN, "next", "Plays this track next").setGuildOnly(true),
+//			Commands.slash("ytcookies", "Supply YouTube cookies").addOption(OptionType.STRING, "cookies", "Exported YouTube cookies", true).setGuildOnly(true),
+//			Commands.slash("next", "Forces a song to play next").addOptions(songRequest).setGuildOnly(true),
 			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)).setGuildOnly(true),
 			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)).setGuildOnly(true),
 			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)).setGuildOnly(true),
@@ -257,45 +268,54 @@ public class Main {
 			Commands.slash("stop", "Stops playback").setGuildOnly(true),
 			Commands.slash("leave", "Leaves the call").setGuildOnly(true),
 			
-			// Private
-			Commands.slash("logs", "Manage log files").setDefaultPermissions(DefaultMemberPermissions.DISABLED).addSubcommands(list, get, clear),
-			
-			// Both
+			// Public and private
 			Commands.slash("clean-up", "Deletes commands")
 		};
 		
-		// Delete commands
-//		jda.retrieveCommands().complete().forEach(hi -> hi.delete().complete());
-//		System.out.println("done");
+		CommandListUpdateAction action = jda.updateCommands().addCommands(commands);
+		
+		// Add only if ownerID was supplied to try and help mask it
+		if(notifyErrors)
+		{
+			action.addCommands(Commands.slash("logs", "View files in running directory").setDefaultPermissions(DefaultMemberPermissions.DISABLED).addOption(OptionType.STRING, "path", "Path to explore").addOptions(new OptionData(OptionType.INTEGER, "page", "Page for file listings").setMinValue(1)));
+		}
 		
 		// Update public commands
-		System.out.println("Updating slash commands");
-		Main.commands = jda.updateCommands().addCommands(commands).complete();
+		// "When a command is not listed in this request, it will be deleted." Don't need to worry about old commands
+		Main.log.info("Updating slash commands");
+		Main.commands = action.complete();
 		
 		// Create InputListener
 		jda.addEventListener(new InputListener(jda, ownerID));
 	}
 	
-	public static ICommandReference getCommandByName(String commandName)
+	public static String getCommandReference(String commandName)
 	{
+		ICommandReference result = null;
+		
 		for(Command command : Main.commands)
 		{
 			for(Subcommand subcommand : command.getSubcommands())
 			{
 				if(subcommand.getFullCommandName().equals(commandName))
 				{
-					return subcommand;
+					result = subcommand;
 				}
 			}
 			
 			if(command.getName().equals(commandName))
 			{
-				return command;
+				result = command;
 			}
 		}
 		
-		Main.log.error("Failed to find command by name " + commandName);
-		return null;
+		if(result == null)
+		{
+			Main.log.error("Failed to find command by name {}", commandName);
+			return "/" + commandName;
+		}
+		
+		return "</" + result.getFullCommandName() + ":" + result.getId() + ">";
 	}
 	
 	public static String getBotName()
@@ -360,33 +380,31 @@ public class Main {
 		
 		try {
 			String raw = loadAsString(new FileInputStream(file));
-			Map<String, Object> tokensMap = JacksonUtils.parseJSON(JacksonUtils.MAP, raw);
+			JsonObject json = JsonUtils.parse(raw);
 			
 			// Fill optional values
 			for(String name : names)
 			{
-				Object key = tokensMap.get(name.substring(2));
+				JsonElement key = json.get(name.substring(2));
 				
 				// If the value exists in the tokens file and it's not already filled from environment variables
 				if(key != null)
 				{
-					argsMap.putIfAbsent(name, key.toString());
+					argsMap.putIfAbsent(name, key.getAsString());
 				}
 			}
 		} catch(FileNotFoundException e) {
 			// It's only an error if there wasn't a token provided in the command line either
 			if(!argsMap.containsKey("--token"))
 			{
-				System.err.println("Failed to find tokens file at " + file.getAbsolutePath() + ". Create one and paste your bot token as a JSON name value pair {\"token\": \"insert_token_here\"}. Alternatively, pass --token=insert_token_here as a program argument.");
+				log.error("Failed to find tokens file at {}. Create one and paste your bot token as a JSON name value pair {\"token\": \"insert_token_here\"}. Alternatively, pass --token=insert_token_here as a program argument.", file.getAbsolutePath());
 				return;
 			}
 		} catch(JsonProcessingException e) {
-			System.err.println("An error occured parsing JSON from " + file.getAbsolutePath() + ". Make sure the file's JSON is properly formatted.");
-			e.printStackTrace();
+			log.error("An error occured parsing JSON from {}. Make sure the file's JSON is properly formatted.", file.getAbsolutePath(), e);
 			return;
 		} catch(IOException e) {
-			System.err.println("An unknown error occurred");
-			e.printStackTrace();
+			log.error("An unknown error occurred", e);
 			return;
 		}
 		
@@ -395,7 +413,7 @@ public class Main {
 		// Require bot token
 		if(token == null)
 		{
-			System.err.println("You need to provide a bot token. You can provide one by creating a tokens.json file, or by passing --token=insert_token_here as a program argument.");
+			log.error("You need to provide a bot token. You can provide one by creating a tokens.json file, or by passing --token=insert_token_here as a program argument.");
 			return;
 		}
 		

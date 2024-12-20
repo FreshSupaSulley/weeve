@@ -1,28 +1,35 @@
 package com.supasulley.music;
 
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.stream.Collectors;
 
-import com.grack.nanojson.JsonObject;
-import com.grack.nanojson.JsonParserException;
+import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.cookie.BasicClientCookie;
+import org.jetbrains.annotations.Nullable;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeSearchProvider;
+import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.tools.Units;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
+import com.supasulley.main.AudioSource;
 import com.supasulley.main.Main;
 
-import dev.lavalink.youtube.YoutubeAudioSourceManager;
-import dev.lavalink.youtube.http.RefreshTokenQueryResponse;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
@@ -30,137 +37,101 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.Interaction;
-import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
+import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
 
 public class AudioHandler {
 	
 	// 1 hour before the bot leaves
-//	private static final long IDLE_TIME = 60 * 1000 * 60;
+	public static final long IDLE_TIME = 60 * 1000 * 60;
 	
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
 	
-	private final YoutubeAudioSourceManager ytSourceManager;
-	
-	// OAuth information
-	private long lastOauthCheck, interval;
-	private String userCode, deviceCode;
-	
-	public enum ButtonCode {
-		
-		PLAY_NOW, PLAY_NEXT;
-		
-		public int getCode()
-		{
-			return ordinal();
-		}
-		
-		public static ButtonCode getPlayCode(int code)
-		{
-			for(ButtonCode sample : values())
-			{
-				if(sample.getCode() == code) return sample;
-			}
-			
-			System.err.println("Could not find PlayCode with ID " + code);
-			return null;
-		}
-	}
+	/** The default AudioSource. Rotates when one fails */
+	private static AudioSource DEFAULT = AudioSource.SOUNDCLOUD;
 	
 	public AudioHandler()
 	{
 		this.playerManager = new DefaultAudioPlayerManager();
 		
-		// YouTube plugin
-		this.ytSourceManager = new YoutubeAudioSourceManager();
-		playerManager.registerSourceManager(ytSourceManager);
+		// Add each audio source manager
+		for(AudioSource source : AudioSource.values())
+		{
+			playerManager.registerSourceManager(source.getManager(null, playerManager));
+		}
 		
 		this.musicManagers = new HashMap<Long, GuildMusicManager>();
 		
-		// OLD
+		// Not needed
+		// Apparently you need to call this after you add sources?
+		AudioSourceManagers.registerRemoteSources(playerManager);
 //		AudioSourceManagers.registerLocalSource(playerManager);
-//		AudioSourceManagers.registerRemoteSources(playerManager);
 	}
 	
-	public void handleSongRequest(ButtonCode code, long userID, SlashCommandInteractionEvent event)
+	@Deprecated
+	public void supplyYTCookies(String cookies, SlashCommandInteractionEvent event)
 	{
-		// First check if we are authenticated with YouTube
-		// If we don't have a refresh token yet
-		if(ytSourceManager.getOauth2RefreshToken() == null)
-		{
-			// If we never logged in before
-			if(this.userCode == null)
+		BasicCookieStore store = new BasicCookieStore();
+		
+		// Break it down
+		try {
+			JsonParser.parseString(cookies).getAsJsonArray().forEach(element ->
 			{
-				Main.log.info("Starting oauth");
+				JsonObject rawCookie = element.getAsJsonObject();
+				BasicClientCookie cookie = new BasicClientCookie(rawCookie.get("name").getAsString(), rawCookie.get("value").getAsString());
 				
-				// Start OAuth
-				JsonObject object = ytSourceManager.getOauth2Handler().fetchDeviceCode();
-				this.userCode = object.getString("user_code");
-				this.deviceCode = object.getString("device_code");
-				this.interval = object.getLong("interval") * 1000; // to ms
-			}
-			else
-			{
-				// Check if it came in the mail today
-				// If we are already in a state of checking and we can check again
-				if(System.currentTimeMillis() - lastOauthCheck > (interval == 0 ? 5000 : interval))
+				rawCookie.asMap().forEach((key, value) ->
 				{
-					this.lastOauthCheck = System.currentTimeMillis();
-					
-					// Check if authenticated
-					try {
-						Main.log.info("Checking if oauth is completed");
-						RefreshTokenQueryResponse response = ytSourceManager.getOauth2Handler().getRefreshTokenByDeviceCode(deviceCode);
-						String error = response.getError();
-						
-						// If we don't have the code yet
-						if(error != null)
+					switch(key)
+					{
+						case "expirationDate":
 						{
-							switch(error)
-							{
-								case "authorization_pending":
-								case "slow_down":
-									// Still waiting
-									Main.log.info("Still waiting on response");
-									break;
-								default:
-									// Error occurred. Restart login
-									throw new IOException(error);
-							}
+							cookie.setExpiryDate(new Date((long) (value.getAsDouble() * 1000)));
+							break;
 						}
-						else
+						case "domain":
 						{
-							// Success!
-							Main.log.info("Linked with Google");
-							JsonObject json = response.getJsonObject();
-							ytSourceManager.getOauth2Handler().updateTokens(json);
-							
-							// Manually set the refresh token to toggle enable flag
-							ytSourceManager.getOauth2Handler().setRefreshToken(json.getString("refresh_token"), true);
+							cookie.setDomain(value.getAsString());
+							break;
 						}
-					} catch(IOException | JsonParserException e) {
-						Main.log.warn("Failed to link with Google");
-						Main.log.warn(e.getMessage());
-						this.userCode = null;
-						this.deviceCode = null;
+						case "path":
+						{
+							cookie.setPath(value.getAsString());
+							break;
+						}
+						case "secure":
+						{
+							cookie.setSecure(value.getAsBoolean());
+							break;
+						}
+						default:
+						{
+							Main.log.warn("Unknown cookie property {}", key);
+							break;
+						}
 					}
-				}
-			}
-			
-			// Check again if we have code
-			if(ytSourceManager.getOauth2RefreshToken() == null)
-			{
-				event.reply("Link " + Main.getBotName() + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + userCode + "**.").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
-				return;
-			}
-			else
-			{
+				});
 				
-			}
+//				cookie.setAttribute(cookies, cookies);
+//				rawCookie.get("httpOnly").getAsBoolean(), rawCookie.get("persistent??????").getAsBoolean(), rawCookie.get("hostOnly").getAsBoolean(), null
+				store.addCookie(cookie);
+			});
+		} catch(Throwable t) {
+			event.reply("Cookies need to be in JSON format. Use [this extension](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) to harvest cookies.").setEphemeral(true).queue();
+			Main.error("Failed to parse cookie as JSON", t);
+			return;
 		}
 		
+//		(((Web) ytManager.getClients()[0]).
+//		ytWebClient.BASE_CONFIG.put
+//		ytManager.getHttpInterfaceManager().configureBuilder(builder -> builder.setDefaultCookieStore(store));
+		event.reply("Cookies added. If YouTube still isn't supported, make sure you are exporting them correctly.").setEphemeral(true).queue();
+	}
+	
+	public void handleSongRequest(@Nullable AudioSource desiredSource, boolean playNext, long userID, SlashCommandInteractionEvent event)
+	{
 		// Get member audio channel
 		AudioChannel audioChannel;
 		
@@ -174,43 +145,82 @@ public class AudioHandler {
 		// Message content
 		String query = event.getOption("query").getAsString();
 		
-		// It's a search term
-		if(!query.startsWith("https://"))
+		// Search for the video
+		event.deferReply(true).queue(hook ->
 		{
-			event.deferReply(true).queue(hook ->
+			final String sourceWarning;
+			AudioSource source = desiredSource == null ? DEFAULT : desiredSource;
+			
+			
+			// If we can't process YouTube
+//			if(source == AudioSource.YOUTUBE)
+//			{
+//				// Switch to alternative source
+//				source = AudioSource.SOUNDCLOUD;
+//				// Warn user they need to provide poToken
+//				sourceWarning = "You're using **" + source.getFancyName() + "**. To use YouTube, supply tokens with </yttoken:" + Main.getCommandByName("yttoken").getId() + ">.\n";
+//			}
+//			else
 			{
-				AtomicReference<String> reference = new AtomicReference<String>("**Select a track:**");
-				ArrayList<ButtonImpl> buttons = new ArrayList<ButtonImpl>();
-				
-				// Do I need to migrate this??
-				YoutubeSearchProvider provider = new YoutubeSearchProvider();
-				provider.loadSearchResult(query, new Function<AudioTrackInfo, AudioTrack>()
+				sourceWarning = "";
+			}
+			
+			playerManager.loadItem(source.getSearchPrefix() + query, new AudioLoadResultHandler()
+			{
+				@Override
+				public void trackLoaded(AudioTrack track)
 				{
-					private int index = 0;
-					
-					@Override
-					public AudioTrack apply(AudioTrackInfo t)
-					{
-						// Streams can't be played
-						if(!t.isStream && index < 5)
-						{
-							buttons.add(new ButtonImpl(code.getCode() + "" + t.uri, "" + ++index, ButtonStyle.PRIMARY, false, null));
-							reference.set(reference.get() + "\n" + "**" + index + ":** " + t.title + " (**" + parseDuration(t.length) + "**)");
-						}
-						
-						return null;
-					}
-				});
+					// It's a link, immediately play it
+					loadURL(playNext, query, audioChannel, event.getChannel());
+				}
 				
-				if(buttons.size() == 0) event.getHook().sendMessage("No results for `" + query + "`").setEphemeral(true).queue();
-				else event.getHook().sendMessage(reference.get()).addActionRow(buttons).setEphemeral(true).queue();
+				@Override
+				public void playlistLoaded(AudioPlaylist playlist)
+				{
+					// Playlist tracks can apparently be empty on some providers (SoundCloud)
+					if(playlist.getTracks().isEmpty())
+					{
+						noMatches();
+						return;
+					}
+					
+					StringBuilder builder = new StringBuilder("**Select a track:**");
+					ArrayList<ButtonImpl> buttons = new ArrayList<ButtonImpl>();
+					
+					for(int i = 0; i < Math.min(playlist.getTracks().size(), 5); i++)
+					{
+						AudioTrackInfo info = playlist.getTracks().get(i).getInfo();
+						buttons.add(new ButtonImpl("" + i, "" + (i + 1), playNext ? ButtonStyle.SECONDARY : ButtonStyle.PRIMARY, false, null));
+						builder.append("\n" + "**" + (i + 1) + ":** " + info.title + (info.length != Units.DURATION_MS_UNKNOWN ? " (**" + parseDuration(info.length) + "**)" : ""));
+					}
+					
+					hook.sendMessage(sourceWarning + builder.toString()).addActionRow(buttons).setEphemeral(true).onSuccess(message -> {
+						// This only grabs the first 5 from the tracks
+						getGuildMusicManager(event.getGuild()).addRequest(message.getId(), playlist.getTracks().stream().limit(buttons.size()).collect(Collectors.toList()));
+					}).queue();
+				}
+				
+				@Override
+				public void noMatches()
+				{
+					hook.sendMessage(sourceWarning + "Nothing found by `" + MarkdownSanitizer.sanitize(query) + "`").setEphemeral(true).queue();
+				}
+				
+				@Override
+				public void loadFailed(FriendlyException exception)
+				{
+					// Rotate default if this was what was loaded
+					if(source == DEFAULT)
+					{
+						DEFAULT = AudioSource.values()[(DEFAULT.ordinal() + 1) % AudioSource.values().length];
+						Main.log.warn("Rotated default audio source to {}", DEFAULT);
+					}
+					
+					hook.sendMessage(sourceWarning + "No audio could be found for `" + MarkdownSanitizer.sanitize(query) + "`").setEphemeral(true).queue();
+					Main.error("Failed to load audio for " + query, exception);
+				}
 			});
-		}
-		// It's a link
-		else
-		{
-			event.reply(loadURL(code == ButtonCode.PLAY_NEXT, query, audioChannel, event.getChannel())).queue();
-		}
+		});
 	}
 	
 	public void handleButtonPress(ButtonInteractionEvent event)
@@ -224,11 +234,21 @@ public class AudioHandler {
 			return;
 		}
 		
-		int code = Integer.parseInt(event.getButton().getId().substring(0, 1));
-		String url = event.getButton().getId().substring(1);
+		GuildMusicManager musicManager = getGuildMusicManager(audioChannel.getGuild());
 		
+		// Check if the options are still cached
+		List<AudioTrack> selections = musicManager.getAudioTrack(event.getMessageId());
+		
+		if(selections == null)
+		{
+			event.deferEdit().setComponents().setContent("This event has expired. Try " + Main.getCommandReference("play") + " again.").queue();
+			return;
+		}
+		
+		// Delete the select track message
 		event.deferEdit().queue(success -> success.deleteOriginal().queue());
-		event.getChannel().sendMessage(loadURL(ButtonCode.getPlayCode(code) == ButtonCode.PLAY_NEXT, url, audioChannel, event.getChannel())).queue();
+		event.getChannel().sendMessage(loadURL(event.getButton().getStyle() == ButtonStyle.SECONDARY, selections.get(Integer.parseInt(event.getButton().getId())).getInfo().uri, audioChannel, event.getChannel())).queue();
+//		musicManager.queue(event.getButton().getStyle() == ButtonStyle.SECONDARY, track, event.getChannel());
 	}
 	
 	private AudioChannel getMemberAudioChannel(Interaction event) throws Exception
@@ -239,7 +259,7 @@ public class AudioHandler {
 		// If the user is not in a voice channel
 		if(audioChannel == null)
 		{
-			throw new Exception("Join a voice channel to play songs");
+			throw new Exception("Join a voice channel first");
 		}
 		
 		if(!guild.getSelfMember().hasPermission(event.getMember().getVoiceState().getChannel(), Permission.VOICE_CONNECT))
@@ -252,7 +272,7 @@ public class AudioHandler {
 	
 	private String loadURL(boolean playNext, String url, AudioChannel audioChannel, MessageChannel textChannel)
 	{
-		GuildMusicManager musicManager = getGuildAudioPlayer(audioChannel.getGuild());
+		GuildMusicManager musicManager = getGuildMusicManager(audioChannel.getGuild());
 		CompletableFuture<String> result = new CompletableFuture<String>();
 		
 		playerManager.loadItemOrdered(musicManager, url, new AudioLoadResultHandler()
@@ -328,7 +348,7 @@ public class AudioHandler {
 	/**
 	 * Gets the GuildMusicManager for a particular guild
 	 */
-	public GuildMusicManager getGuildAudioPlayer(Guild guild)
+	public GuildMusicManager getGuildMusicManager(Guild guild)
 	{
 		GuildMusicManager musicManager = musicManagers.get(guild.getIdLong());
 		
@@ -368,37 +388,40 @@ public class AudioHandler {
 	
 	public static String parseDuration(long duration)
 	{
+		if(duration == Units.DURATION_MS_UNKNOWN) return "?";
+		
 		int seconds = (int) ((duration % 60000) / 1000);
 		int minutes = (int) ((duration % 3600000) / 60000);
 		int hours = (int) (duration / 3600000);
 		
-		return (hours != 0 ? String.format("%02d", hours) + ":" : "") + String.format("%02d", minutes) + ":" + String.format("%02d", seconds);
+		return (hours != 0 ? String.format("%01d", hours) + ":" : "") + String.format("%0" + (hours == 0 ? "1" : "2") + "d", minutes) + ":" + String.format("%02d", seconds);
 	}
 	
-//	public void tick(JDA jda)
-//	{
-//		Iterator<Entry<Long, GuildMusicManager>> iterator = musicManagers.entrySet().iterator();
-//		
-//		while(iterator.hasNext())
-//		{
-//			Entry<Long, GuildMusicManager> entry = iterator.next();
-//			GuildMusicManager manager = entry.getValue();
-//			
-//			// If this manager isn't playing anything AND it's been a fat sec since we've had to handle a request
-//			if(!manager.isPlaying() && manager.timeSinceLastRequest() > IDLE_TIME)
-//			{
-//				// Check if the channel is empty
-//				Guild guild = jda.getGuildById(entry.getKey());
-//				
-//				if(guild != null && guild.getAudioManager().isConnected())
-//				{
-//					// Check if its been a while since the last command
-//					manager.sendToOrigin("Left due to inactivity");
-//					guild.getAudioManager().closeAudioConnection();
-//				}
-//				
-//				iterator.remove();
-//			}
-//		}
-//	}
+	public void tick(JDA jda)
+	{
+		Iterator<Entry<Long, GuildMusicManager>> iterator = musicManagers.entrySet().iterator();
+		
+		while(iterator.hasNext())
+		{
+			Entry<Long, GuildMusicManager> entry = iterator.next();
+			GuildMusicManager manager = entry.getValue();
+			
+			// If this manager isn't playing anything AND it's been a fat sec since we've had to handle a request
+			// manager.getLeaveTime() != 0 is likely redundant
+			if(!manager.isPlaying() && manager.getLeaveTime() != 0 && System.currentTimeMillis() > manager.getLeaveTime())
+			{
+				// Check if the channel is empty
+				Guild guild = jda.getGuildById(entry.getKey());
+				
+				if(guild != null && guild.getAudioManager().isConnected())
+				{
+					// Check if its been a while since the last command
+					manager.sendToOrigin("Left due to inactivity");
+					guild.getAudioManager().closeAudioConnection();
+				}
+				
+				iterator.remove();
+			}
+		}
+	}
 }

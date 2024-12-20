@@ -1,5 +1,8 @@
 package com.supasulley.music;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
@@ -21,6 +24,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 	private final AudioPlayer player;
 	private final AudioPlayerSendHandler sendHandler;
 	
+	private long leaveTime;
+	
 	// Scheduler
 	private final LinkedBlockingDeque<AudioRequest> queue;
 	private boolean loop;
@@ -28,18 +33,52 @@ public class GuildMusicManager extends AudioEventAdapter {
 	/** Stores the last channel someone sent a message in */
 	private MessageChannel messageChannel;
 	
+	private Map<String, List<AudioTrack>> requestMap;
+	
 	public GuildMusicManager(AudioPlayerManager manager)
 	{
 		this.player = manager.createPlayer();
 		this.player.addListener(this);
 		this.sendHandler = new AudioPlayerSendHandler(player);
-		
 		this.queue = new LinkedBlockingDeque<AudioRequest>();
+		this.requestMap = new HashMap<String, List<AudioTrack>>();
+	}
+	
+	/**
+	 * @return time (millis) when the bot should leave the call.
+	 */
+	public long getLeaveTime()
+	{
+		return leaveTime;
+	}
+	
+	/**
+	 * Adds an {@linkplain AudioTrack} list representing the options for a play request.
+	 * 
+	 * @param messageID message ID of the selection
+	 * @param track     list of audio track options of this request
+	 */
+	public void addRequest(String messageID, List<AudioTrack> track)
+	{
+		requestMap.put(messageID, track);
+	}
+	
+	/**
+	 * Gets and removes the list of {@linkplain AudioTrack} options associated with this message ID.
+	 * 
+	 * @param messageID message ID of the selection
+	 * @return list of audio track options of this request, or null if the request wasn't found
+	 */
+	public List<AudioTrack> getAudioTrack(String messageID)
+	{
+		return requestMap.remove(messageID);
 	}
 	
 	@Override
 	public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason)
 	{
+		leaveTime = System.currentTimeMillis() + AudioHandler.IDLE_TIME;
+		
 		// Only start the next track if the end reason is suitable for it (FINISHED or LOAD_FAILED)
 		if(endReason.mayStartNext)
 		{
@@ -73,6 +112,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public void queue(boolean playNext, AudioRequest track, MessageChannel textChannel)
 	{
+		leaveTime = 0;
 		this.messageChannel = textChannel;
 		
 		// If queue is empty, immediately start it. Otherwise, add to queue
@@ -204,13 +244,13 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		StringBuilder builder = new StringBuilder();
 		
-		if(queue.isEmpty())
+		if(!isPlaying())
 		{
 			builder.append("The queue is empty");
 		}
 		else
 		{
-			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(getCurrentRequest().getAudioTrack()));
+			builder.append("\u266A " + new RequestInfoBuilder().bold().showDuration().showLink().showPosition().apply(getCurrentRequest()));
 			
 			if(!queue.isEmpty())
 			{
@@ -254,16 +294,17 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public boolean isPlaying()
 	{
-		return !queue.isEmpty();
-//		return player.getPlayingTrack() != null ? true : false;
+//		return !queue.isEmpty();
+		return player.getPlayingTrack() != null;
 	}
 	
 	/**
 	 * @return currently playing {@link AudioRequest}, or null if nothing is playing
 	 */
-	public AudioRequest getCurrentRequest()
+	public AudioTrack getCurrentRequest()
 	{
-		return queue.peek();
+		return player.getPlayingTrack();
+//		return queue.peek();
 	}
 	
 	/**
@@ -296,6 +337,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	 */
 	public void reset()
 	{
+		requestMap.clear();
 		queue.clear();
 		player.startTrack(null, false);
 		loop = false;
@@ -313,12 +355,12 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		if(messageChannel != null)
 		{
-			System.out.println("Sending \"" + message + "\" to voice request origin");
+			Main.log.error("Sending \"{}\" to voice request origin", message);
 			messageChannel.sendMessage(message).queue();
 		}
 		else
 		{
-			System.out.println("This isn't supposed to happen :( messageChannel is null, tried to send " + message);
+			Main.log.error("This isn't supposed to happen :( messageChannel is null, tried to send {}", message);
 		}
 	}
 }

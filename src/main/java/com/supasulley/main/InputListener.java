@@ -1,6 +1,8 @@
 package com.supasulley.main;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -26,7 +28,6 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.session.SessionDisconnectEvent;
 import net.dv8tion.jda.api.events.session.SessionResumeEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.commands.ICommandReference;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.managers.AudioManager;
@@ -37,6 +38,7 @@ import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 public class InputListener extends ListenerAdapter {
 	
 	private static final int MAX_CLEARS = 50;
+	private static final File BASE_PATH = new File(System.getProperty("user.dir"));
 	
 	private final String ownerID;
 	
@@ -64,6 +66,7 @@ public class InputListener extends ListenerAdapter {
 			handleSlashCommand(event);
 		} catch(Throwable t) {
 			Main.error(t);
+			if(!event.isAcknowledged()) event.reply(Main.ERROR_MESSAGE).queue();
 		}
 	}
 	
@@ -83,33 +86,33 @@ public class InputListener extends ListenerAdapter {
 		{
 			case "play":
 			{
-				audioHandler.handleSongRequest(AudioHandler.ButtonCode.PLAY_NOW, user.getIdLong(), event);
-				return;
+				audioHandler.handleSongRequest(event.getOption("source", (option) -> AudioSource.valueOf(option.getAsString())), event.getOption("next", false, option -> option.getAsBoolean()), user.getIdLong(), event);
+				break;
 			}
-			case "next":
+			case "ytcookies":
 			{
-				audioHandler.handleSongRequest(AudioHandler.ButtonCode.PLAY_NEXT, user.getIdLong(), event);
-				return;
+				audioHandler.supplyYTCookies(event.getOption("cookies", OptionMapping::getAsString), event);
+				break;
 			}
 			case "skip":
 			{
 				int songs = event.getOption("amount", 1, OptionMapping::getAsInt);
-				event.reply(audioHandler.getGuildAudioPlayer(guild).skipTracks(songs)).queue();
-				return;
+				event.reply(audioHandler.getGuildMusicManager(guild).skipTracks(songs)).queue();
+				break;
 			}
 			case "stop":
 			{
-				audioHandler.getGuildAudioPlayer(guild).reset();
+				audioHandler.getGuildMusicManager(guild).reset();
 				event.reply("Stopped playback").queue();
-				return;
+				break;
 			}
 			case "forward":
 			{
-				GuildMusicManager guildMusicManager = audioHandler.getGuildAudioPlayer(guild);
+				GuildMusicManager guildMusicManager = audioHandler.getGuildMusicManager(guild);
 				if(!guildMusicManager.isPlaying())
 				{
 					event.reply("Nothing is playing").queue();
-					return;
+					break;
 				}
 				
 				AtomicLong msSkip = new AtomicLong();
@@ -130,7 +133,7 @@ public class InputListener extends ListenerAdapter {
 							msSkip.set(msSkip.get() + value * 3600000);
 							break;
 						default:
-							System.err.println("Unhandled integer OptionType for forward command");
+							Main.error("Unhandled integer OptionType for forward command");
 							break;
 					}
 				});
@@ -139,17 +142,17 @@ public class InputListener extends ListenerAdapter {
 					event.reply("You must skip at least one second").queue();
 				else
 					event.reply(guildMusicManager.forward(msSkip.get())).queue();
-				return;
+				break;
 			}
 			case "loop":
 			{
-				event.reply(audioHandler.getGuildAudioPlayer(guild).loop(event.getOption("loop").getAsBoolean())).queue();
-				return;
+				event.reply(audioHandler.getGuildMusicManager(guild).loop(event.getOption("loop").getAsBoolean())).queue();
+				break;
 			}
 			case "queue":
 			{
-				event.reply(audioHandler.getGuildAudioPlayer(guild).getQueueList()).queue();
-				return;
+				event.reply(audioHandler.getGuildMusicManager(guild).getQueueList()).queue();
+				break;
 			}
 			case "leave":
 			{
@@ -165,7 +168,7 @@ public class InputListener extends ListenerAdapter {
 					event.reply(Main.getBotName() + " is not in a channel").queue();
 				}
 				
-				return;
+				break;
 			}
 			// Private
 			case "logs":
@@ -177,84 +180,69 @@ public class InputListener extends ListenerAdapter {
 					return;
 				}
 				
-				switch(event.getSubcommandName())
+				// Optional
+				String path = event.getOption("path", option -> option.getAsString());
+				File file = path == null ? BASE_PATH : new File(path);
+				
+				// Prevent directory traversal
+				Path basePath = Paths.get(System.getProperty("user.dir"));
+				Path resolvedPath = basePath.resolve(file.toPath()).normalize();
+				
+				if(!resolvedPath.startsWith(basePath))
 				{
-					case "list":
-					{
-						File[] files = getLogFiles();
-						
-						if(files.length == 0)
-						{
-							event.reply("No files found!").queue();
-							return;
-						}
-						
-						StringBuilder builder = new StringBuilder("**Select a file:**\n");
-						
-						// Arbitrarily saying only put 20 files here
-						for(int i = 0; i < Math.min(files.length, 20); i++)
-						{
-							builder.append("- " + files[i].getName() + "\n");
-						}
-						
-						// If there's more files than normal
-						if(files.length > Main.MAX_LOGS)
-						{
-							builder.append("... and **" + (files.length - Main.MAX_LOGS) + "** more. ");
-						}
-						
-						ICommandReference command = Main.getCommandByName("logs get");
-						builder.append("Pass the filename (and extension) in </" + command.getFullCommandName() + ":" + command.getId() + ">");
-						
-						// Splice just in case
-						String toSend = builder.toString();
-						event.reply(toSend.substring(0, Math.min(toSend.length(), Message.MAX_CONTENT_LENGTH))).queue();
-						break;
-					}
-					case "get":
-					{
-						// Required option
-						String logFile = event.getOption("file", option -> option.getAsString());
-						
-						/*
-						 * We're doing this the secure way Instead of just grabbing new File("/logs" + logIndex), I'm iterating through each file in the logs directory and checking if
-						 * the name matches up. That way you can't back traverse (even though that should be fine as it's just the operator)
-						 */
-						for(File file : getLogFiles())
-						{
-							if(file.getName().equals(logFile))
-							{
-								event.replyFiles(FileUpload.fromData(file)).queue();
-								return;
-							}
-						}
-						
-						event.reply("`" + logFile + "` not found").queue();
-						break;
-					}
-					case "clear":
-					{
-						// Don't delete the current log
-						int count = 0;
-						
-						for(File file : getLogFiles())
-						{
-							// Do not remove active log file, it doesn't seem to get regenerated
-							if(file.getName().equals(Main.LOG_CURRENT.getName()))
-							{
-								continue;
-							}
-							
-							count++;
-							file.delete();
-						}
-						
-						event.reply("Deleted **" + count + "** logs").queue();
-						break;
-					}
+					event.reply("No directory traversal for you").queue();
+					break;
 				}
 				
-				return;
+				// If it's a file return it
+				if(!file.isDirectory())
+				{
+					if(file.exists()) event.replyFiles(FileUpload.fromData(file)).queue();
+					else event.reply("`" + file + "` not found").queue();
+				}
+				else
+				{
+					File[] files = getDirectoryFiles(file);
+					
+					if(files.length == 0)
+					{
+						event.reply("No files found!").queue();
+						break;
+					}
+					
+					final int MAX_LOGS = 10;
+					
+					// Optional, but min value would be 1 if provided, then zero based
+					final int page = event.getOption("page", 1, option -> option.getAsInt()) - 1;
+					final int maxPages = (int) Math.ceil(1f * files.length / MAX_LOGS);
+					
+					// Check if out of range
+					if(page * MAX_LOGS >= files.length)
+					{
+						event.reply("Offset exceeds number of files (**" + files.length + "**). Use pages 1 - " + maxPages).queue();
+						break;
+					}
+					
+					StringBuilder builder = new StringBuilder("**Select a file (" + files.length + " total" + (maxPages == 1 ? "" : (", page " + (page + 1) + "/" + maxPages)) + "):**\n");
+					
+					// Arbitrarily saying only put 20 files here
+					for(int i = page * MAX_LOGS; i < Math.min(files.length, page * MAX_LOGS + MAX_LOGS); i++)
+					{
+						builder.append("- ```" + basePath.relativize(Paths.get(files[i].getAbsolutePath())) + "```\n");
+					}
+					
+					// If there's more files to show
+					if(files.length - page * MAX_LOGS > MAX_LOGS)
+					{
+						builder.append("... and **" + (files.length - MAX_LOGS) + "** more. ");
+					}
+					
+					// Splice just in case
+					String toSend = builder.toString();
+					event.reply(toSend.substring(0, Math.min(toSend.length(), Message.MAX_CONTENT_LENGTH))).queue();
+				}
+				
+				break;
 			}
 			// Both
 			case "clean-up":
@@ -262,19 +250,19 @@ public class InputListener extends ListenerAdapter {
 				if(event.isFromGuild() && !guild.getSelfMember().hasPermission(event.getGuildChannel(), Permission.MESSAGE_MANAGE, Permission.MESSAGE_HISTORY))
 				{
 					event.reply(Main.getBotName() + " needs **Manage Messages** and **Read Message History** permissions to clear messages.").setEphemeral(true).queue();
-					return;
+					break;
 				}
 				
 				// Private channel
 				handleClearRequest(event.getMessageChannel());
 				event.reply("Clearing " + MAX_CLEARS + "...").setEphemeral(true).queue();
-				return;
+				break;
 			}
 			default:
 			{
 				Main.log.error("Unhandled command " + event.getFullCommandName());
 				event.reply(Main.ERROR_MESSAGE).setEphemeral(true).queue();
-				return;
+				break;
 			}
 		}
 	}
@@ -285,16 +273,16 @@ public class InputListener extends ListenerAdapter {
 	}
 	
 	/**
-	 * @return a potentially empty list of all log files in the logs folder 
+	 * @return a potentially empty list of all files in the running directory folder 
 	 */
-	private File[] getLogFiles()
+	private File[] getDirectoryFiles(File path)
 	{
-		File[] logs = Main.LOGS_DIR.listFiles();
-		if(logs == null) return new File[0];
+		File[] files = path.listFiles();
+		if(files == null) return new File[0];
 		
 		// Sort them by last modified
-		Arrays.sort(logs, (one, two) -> Long.compare(one.lastModified(), two.lastModified()));
-		return logs;
+		Arrays.sort(files, (one, two) -> Long.compare(one.lastModified(), two.lastModified()));
+		return files;
 	}
 	
 	@Override
@@ -303,13 +291,15 @@ public class InputListener extends ListenerAdapter {
 		audioHandler.handleButtonPress(event);
 	}
 	
-	// Assuming onGuildVoiceUpdate works as intended this shouldn't be necessary anymore
-//	@Override
-//	public void onGatewayPing(GatewayPingEvent event)
-//	{
-//		// Make sure we're not in a call by ourselves
-//		audioHandler.tick(event.getJDA());
-//	}
+	/**
+	 * We need this for detecting inactivity
+	 */
+	@Override
+	public void onGatewayPing(GatewayPingEvent event)
+	{
+		// Make sure we're not in a call by ourselves
+		audioHandler.tick(event.getJDA());
+	}
 	
 	@Override
 	public void onGuildVoiceUpdate(GuildVoiceUpdateEvent event)
@@ -319,7 +309,7 @@ public class InputListener extends ListenerAdapter {
 		// If someone left
 		if(event.getChannelLeft() != null)
 		{
-			GuildMusicManager manager = audioHandler.getGuildAudioPlayer(guild);
+			GuildMusicManager manager = audioHandler.getGuildMusicManager(guild);
 			GuildVoiceState state = guild.getSelfMember().getVoiceState();
 			
 			if(state.inAudioChannel())
