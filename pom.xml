@@ -61,7 +61,12 @@
 	<repositories>
 		<repository>
 			<id>lavalink-releases</id>
-			<url>https://maven.lavalink.dev/snapshots</url>
+			<url>https://maven.lavalink.dev/releases</url>
+		</repository>
+		<repository>
+			<id>TopiWTF-releases</id>
+			<name>Topis Maven Repo</name>
+			<url>https://maven.topi.wtf/releases</url>
 		</repository>
 	</repositories>
 	<dependencies>
@@ -102,7 +107,7 @@
 			<artifactId>gson</artifactId>
 			<version>2.10.1</version>
 		</dependency>
-		<!-- youtube-source public API branch -->
+		<!-- youtube-source public API branch  -->
 		<dependency>
 			<groupId>dev.lavalink.youtube</groupId>
 			<artifactId>youtube-plugin</artifactId>

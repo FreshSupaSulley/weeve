@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.cookie.BasicClientCookie;
+import org.jetbrains.annotations.Nullable;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -28,8 +29,6 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.supasulley.main.AudioSource;
 import com.supasulley.main.Main;
 
-import dev.lavalink.youtube.YoutubeAudioSourceManager;
-import dev.lavalink.youtube.clients.Web;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -50,21 +49,24 @@ public class AudioHandler {
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
 	
-	private final YoutubeAudioSourceManager ytManager;
-	private final Web ytWebClient;
+	/** The default AudioSource. Rotates when one fails */
+	private static AudioSource DEFAULT = AudioSource.SOUNDCLOUD;
 	
 	public AudioHandler()
 	{
 		this.playerManager = new DefaultAudioPlayerManager();
 		
-		// Add the default support for SoundCloud, Vimeo, etc. AND the YouTube plugin
-		AudioSourceManagers.registerRemoteSources(playerManager);
-		playerManager.registerSourceManager(new PlaywrightSourceManager());
-		playerManager.registerSourceManager(ytManager = new YoutubeAudioSourceManager(ytWebClient = new Web(), new PlaywrightClient()));
+		// Add each audio source manager
+		for(AudioSource source : AudioSource.values())
+		{
+			playerManager.registerSourceManager(source.getManager(null, playerManager));
+		}
 		
 		this.musicManagers = new HashMap<Long, GuildMusicManager>();
 		
 		// Not needed
+		// Apparently you need to call this after you add sources?
+		AudioSourceManagers.registerRemoteSources(playerManager);
 //		AudioSourceManagers.registerLocalSource(playerManager);
 	}
 	
@@ -128,7 +130,7 @@ public class AudioHandler {
 		event.reply("Cookies added. If YouTube still isn't supported, make sure you are exporting them correctly.").setEphemeral(true).queue();
 	}
 	
-	public void handleSongRequest(AudioSource desiredSource, boolean playNext, long userID, SlashCommandInteractionEvent event)
+	public void handleSongRequest(@Nullable AudioSource desiredSource, boolean playNext, long userID, SlashCommandInteractionEvent event)
 	{
 		// Get member audio channel
 		AudioChannel audioChannel;
@@ -147,7 +149,8 @@ public class AudioHandler {
 		event.deferReply(true).queue(hook ->
 		{
 			final String sourceWarning;
-			AudioSource source = desiredSource;
+			AudioSource source = desiredSource == null ? DEFAULT : desiredSource;
+			
 			
 			// If we can't process YouTube
 //			if(source == AudioSource.YOUTUBE)
@@ -206,6 +209,13 @@ public class AudioHandler {
 				@Override
 				public void loadFailed(FriendlyException exception)
 				{
+					// Rotate default if this was what was loaded
+					if(source == DEFAULT)
+					{
+						DEFAULT = AudioSource.values()[(DEFAULT.ordinal() + 1) % AudioSource.values().length];
+						Main.log.warn("Rotated default audio source to {}", DEFAULT);
+					}
+					
 					hook.sendMessage(sourceWarning + "No audio could be found for `" + MarkdownSanitizer.sanitize(query) + "`").setEphemeral(true).queue();
 					Main.error("Failed to load audio for " + query, exception);
 				}

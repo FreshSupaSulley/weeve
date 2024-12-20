@@ -66,6 +66,7 @@ public class InputListener extends ListenerAdapter {
 			handleSlashCommand(event);
 		} catch(Throwable t) {
 			Main.error(t);
+			if(!event.isAcknowledged()) event.reply(Main.ERROR_MESSAGE).queue();
 		}
 	}
 	
@@ -85,7 +86,7 @@ public class InputListener extends ListenerAdapter {
 		{
 			case "play":
 			{
-				audioHandler.handleSongRequest(event.getOption("source", AudioSource.SOUNDCLOUD, (option) -> AudioSource.valueOf(option.getAsString())), event.getOption("next", false, option -> option.getAsBoolean()), user.getIdLong(), event);
+				audioHandler.handleSongRequest(event.getOption("source", (option) -> AudioSource.valueOf(option.getAsString())), event.getOption("next", false, option -> option.getAsBoolean()), user.getIdLong(), event);
 				break;
 			}
 			case "ytcookies":
