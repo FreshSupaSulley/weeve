@@ -1,7 +1,7 @@
 # weeve ♪
 Run your Discord bot with weeve to play YouTube in voice calls.
 
-- [x] Supports YouTube in voice calls
+- [x] Supports YouTube (and SoundCloud) in voice calls
 - [x] Can search for videos and play links
 - [x] Customizable bot avatar
 - [x] Basic commands
@@ -16,7 +16,7 @@ Run your Discord bot with weeve to play YouTube in voice calls.
 
 weeve runs on Java 11, which should be backwards compatible with newer versions. Make sure you have Java installed by running ```java -version```.
 
-1. [Create a new Discord bot](#q-i-dont-know-how-to-make-a-discord-bot).
+1. [Create a new Discord bot](#faq).
 2. Download the [latest release](https://github.com/FreshSupaSulley/weeve/releases/latest) of *weeve.jar*. Move it into a new folder.
 3. Create a *tokens.json* file inside the folder to hold your Discord bot's generated token, like this:
    ```json
@@ -30,7 +30,7 @@ weeve runs on Java 11, which should be backwards compatible with newer versions.
    weeve will read the *tokens.json* file in the working directory and use it to run your bot. Allow a few minutes before restarting Discord for the slash commands to appear.
 
 # Linking to YouTube
-Thanks to Google's war against bots on YouTube, support for YouTube videos are (currently) cutting-edge. Since YouTube TV OAuth no longer works, you need to provide a `po-token` and `visitor-data` to connect to YouTube. If you chose to not provide a YouTube token, the bot runs on SoundCloud by default.
+Thanks to Google's war against bots on YouTube, support for YouTube videos are (currently) cutting-edge. When you first attempt to use YouTube, it will ask you to link a Google account to the bot for credentials.
 
 > [!WARNING]
 > I **strongly recommend** you use a burner account to link with Google. The account used to generated tokens may get flagged and you risk getting your Google account banned. Visit [YouTube Plugin](https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-a-potoken) for details.
@@ -38,24 +38,22 @@ Thanks to Google's war against bots on YouTube, support for YouTube videos are (
 # Commands
 | Name | Description |
 | --- | --- |
-| /play `**string**: query` | Plays a URL, or searches with a query. |
-| /yttoken `**string**: po-token` `**string**: visitor-data` | Globally links the bot up to YouTube across all servers, enabling YouTube support. |
-| /skip `**integer**: amount` `*optional* **boolean**: next` | Skips the playing song, or an optional number of tracks. Includes option to skip the queue and play next. |
+| /play `string: query` | Plays a URL, or searches with a query. |
+| /yttoken `string: po-token` `**string**: visitor-data` | Globally links the bot up to YouTube across all servers, enabling YouTube support. |
+| /skip `integer: amount` `optional boolean: next` | Skips the playing song, or an optional number of tracks. Includes option to skip the queue and play next. |
 | /reset | Stops playback and empties the queue. |
-| /loop `**boolean**: loop` | Toggles looping of the playing track. |
+| /loop `boolean: loop` | Toggles looping of the playing track. |
 | /queue | Returns all queued songs. |
 | /leave | Leaves the call. |
 | /clean-up | Deletes up to 50 messages sent by the bot.<br>*\*Requires Manage Messages and Read Message History* |
 
 ## Operator Commands
-Only available to the bot owner. Used for logging and debugging.
+Only available to the bot owner and when `notify_errors` are enabled. Used for grabbing files in the running directory. Best used if you choose to supply your own logging framework and generate logs.
 | Name | Description |
 | --- | --- |
-| /logs list | Lists all log files |
-| /logs get | Gets a log file |
-| /logs clear | Deletes old log files |
+| /logs `string: path` `optional integer: page` | View files in running directory |
 
-**/clean-up** also works here.
+**/clean-up** also works in operator DMs.
 
 # FAQ
 ### Q: I don't know how to make a Discord bot.
@@ -103,4 +101,4 @@ weeve runs on Java 11 and uses [JDA](https://github.com/discord-jda/JDA) to conn
 Feel free to do whatever you want with this repository. If you find a bug, please open an issue with the logs attached.
 
 # Future
-- Maybe make weeve simulate a full web browser environment and harvest the audio stream from it? Like Chromium?
+- Maybe make weeve simulate a full web browser environment and harvest the audio stream from it? Like Chromium? Property / command to set default audio provider? Extra action row to search another provider when its a search term?

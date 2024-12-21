@@ -1,10 +1,10 @@
 package com.supasulley.main;
 
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
-import com.sedmelluq.discord.lavaplayer.source.bandcamp.BandcampAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.soundcloud.SoundCloudAudioSourceManager;
+import com.supasulley.music.CustomYouTubeManager;
 
-import dev.lavalink.youtube.YoutubeAudioSourceManager;
+import dev.lavalink.youtube.clients.Music;
 import dev.lavalink.youtube.clients.TvHtml5Embedded;
 
 // playerManager.registerSourceManager(new YoutubeAudioSourceManager(true, null, null));
@@ -20,9 +20,11 @@ import dev.lavalink.youtube.clients.TvHtml5Embedded;
 
 public enum AudioSource
 {
-	YOUTUBE("YouTube", YoutubeAudioSourceManager.MUSIC_SEARCH_PREFIX, new YoutubeAudioSourceManager(new TvHtml5Embedded())),
-	SOUNDCLOUD("SoundCloud", "scsearch:", SoundCloudAudioSourceManager.createDefault()),
-	BANDCAMP("Bandcamp", "bcsearch:", new BandcampAudioSourceManager());
+	// Music for searching, TvHtml5Embedded for oauth
+	YOUTUBE("YouTube", CustomYouTubeManager.SEARCH_PREFIX, new CustomYouTubeManager(new Music(), new TvHtml5Embedded())),
+	SOUNDCLOUD("SoundCloud", "scsearch:", SoundCloudAudioSourceManager.createDefault());
+//	BANDCAMP("Bandcamp", "bcsearch:", new BandcampAudioSourceManager(), BandcampAudioTrack.class);
+	// Bandcamp has a bug where titles can contain HTML character codes and I'm too lazy to fix it rn because who tf uses bandcamp
 	
 	private String fancyName, searchPrefix;
 	private AudioSourceManager manager;
