@@ -89,11 +89,6 @@ public class InputListener extends ListenerAdapter {
 				audioHandler.handleSongRequest(event.getOption("source", (option) -> AudioSource.valueOf(option.getAsString())), event.getOption("next", false, option -> option.getAsBoolean()), user.getIdLong(), event);
 				break;
 			}
-			case "ytcookies":
-			{
-				audioHandler.supplyYTCookies(event.getOption("cookies", OptionMapping::getAsString), event);
-				break;
-			}
 			case "skip":
 			{
 				int songs = event.getOption("amount", 1, OptionMapping::getAsInt);

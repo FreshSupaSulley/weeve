@@ -1,7 +1,7 @@
 package com.supasulley.music;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -11,12 +11,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import org.apache.http.impl.client.BasicCookieStore;
-import org.apache.http.impl.cookie.BasicClientCookie;
 import org.jetbrains.annotations.Nullable;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.grack.nanojson.JsonObject;
+import com.grack.nanojson.JsonParserException;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
@@ -29,6 +27,8 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.supasulley.main.AudioSource;
 import com.supasulley.main.Main;
 
+import dev.lavalink.youtube.YoutubeAudioSourceManager;
+import dev.lavalink.youtube.http.RefreshTokenQueryResponse;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -37,6 +37,7 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.Interaction;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
@@ -49,6 +50,10 @@ public class AudioHandler {
 	private final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
 	
+	// OAuth information
+	private long lastOauthCheck, interval;
+	private String userCode, deviceCode;
+	
 	/** The default AudioSource. Rotates when one fails */
 	private static AudioSource DEFAULT = AudioSource.SOUNDCLOUD;
 	
@@ -59,7 +64,7 @@ public class AudioHandler {
 		// Add each audio source manager
 		for(AudioSource source : AudioSource.values())
 		{
-			playerManager.registerSourceManager(source.getManager(null, playerManager));
+			playerManager.registerSourceManager(source.getManager());
 		}
 		
 		this.musicManagers = new HashMap<Long, GuildMusicManager>();
@@ -70,68 +75,87 @@ public class AudioHandler {
 //		AudioSourceManagers.registerLocalSource(playerManager);
 	}
 	
-	@Deprecated
-	public void supplyYTCookies(String cookies, SlashCommandInteractionEvent event)
-	{
-		BasicCookieStore store = new BasicCookieStore();
-		
-		// Break it down
-		try {
-			JsonParser.parseString(cookies).getAsJsonArray().forEach(element ->
-			{
-				JsonObject rawCookie = element.getAsJsonObject();
-				BasicClientCookie cookie = new BasicClientCookie(rawCookie.get("name").getAsString(), rawCookie.get("value").getAsString());
-				
-				rawCookie.asMap().forEach((key, value) ->
-				{
-					switch(key)
-					{
-						case "expirationDate":
-						{
-							cookie.setExpiryDate(new Date((long) (value.getAsDouble() * 1000)));
-							break;
-						}
-						case "domain":
-						{
-							cookie.setDomain(value.getAsString());
-							break;
-						}
-						case "path":
-						{
-							cookie.setPath(value.getAsString());
-							break;
-						}
-						case "secure":
-						{
-							cookie.setSecure(value.getAsBoolean());
-							break;
-						}
-						default:
-						{
-							Main.log.warn("Unknown cookie property {}", key);
-							break;
-						}
-					}
-				});
-				
-//				cookie.setAttribute(cookies, cookies);
-//				rawCookie.get("httpOnly").getAsBoolean(), rawCookie.get("persistent??????").getAsBoolean(), rawCookie.get("hostOnly").getAsBoolean(), null
-				store.addCookie(cookie);
-			});
-		} catch(Throwable t) {
-			event.reply("Cookies need to be in JSON format. Use [this extension](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) to harvest cookies.").setEphemeral(true).queue();
-			Main.error("Failed to parse cookie as JSON", t);
-			return;
-		}
-		
-//		(((Web) ytManager.getClients()[0]).
-//		ytWebClient.BASE_CONFIG.put
-//		ytManager.getHttpInterfaceManager().configureBuilder(builder -> builder.setDefaultCookieStore(store));
-		event.reply("Cookies added. If YouTube still isn't supported, make sure you are exporting them correctly.").setEphemeral(true).queue();
-	}
-	
 	public void handleSongRequest(@Nullable AudioSource desiredSource, boolean playNext, long userID, SlashCommandInteractionEvent event)
 	{
+		// If the user explicitly asked for YouTube
+		if(desiredSource == AudioSource.YOUTUBE)
+		{
+			YoutubeAudioSourceManager ytSourceManager = (YoutubeAudioSourceManager) AudioSource.YOUTUBE.getManager();
+			
+			// First check if we are authenticated with YouTube
+			// If we don't have a refresh token yet
+			if(ytSourceManager.getOauth2RefreshToken() == null)
+			{
+				// If we never logged in before
+				if(this.userCode == null)
+				{
+					Main.log.info("Starting oauth");
+					
+					// Start OAuth
+					JsonObject object = ytSourceManager.getOauth2Handler().fetchDeviceCode();
+					this.userCode = object.getString("user_code");
+					this.deviceCode = object.getString("device_code");
+					this.interval = object.getLong("interval") * 1000; // to ms
+				}
+				else
+				{
+					// Check if it came in the mail today
+					// If we are already in a state of checking and we can check again
+					if(System.currentTimeMillis() - lastOauthCheck > (interval == 0 ? 5000 : interval))
+					{
+						this.lastOauthCheck = System.currentTimeMillis();
+						
+						// Check if authenticated
+						try
+						{
+							Main.log.info("Checking if oauth is completed");
+							RefreshTokenQueryResponse response = ytSourceManager.getOauth2Handler().getRefreshTokenByDeviceCode(deviceCode);
+							String error = response.getError();
+							
+							// If we don't have the code yet
+							if(error != null)
+							{
+								switch(error)
+								{
+									case "authorization_pending":
+									case "slow_down":
+										// Still waiting
+										Main.log.info("Still waiting on response");
+										break;
+									default:
+										// Error occurred. Restart login
+										throw new IOException(error);
+								}
+							}
+							else
+							{
+								// Success!
+								Main.log.info("Linked with Google");
+								JsonObject json = response.getJsonObject();
+								ytSourceManager.getOauth2Handler().updateTokens(json);
+								
+								// Manually set the refresh token to toggle enable flag
+								ytSourceManager.getOauth2Handler().setRefreshToken(json.getString("refresh_token"), true);
+							}
+						} catch(IOException | JsonParserException e)
+						{
+							Main.log.warn("Failed to link with Google");
+							Main.log.warn(e.getMessage());
+							this.userCode = null;
+							this.deviceCode = null;
+						}
+					}
+				}
+				
+				// Check again if we have code
+				if(ytSourceManager.getOauth2RefreshToken() == null)
+				{
+					event.reply("__To start using **YouTube__:\nLink " + Main.getBotName() + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + userCode + "**.\n*You only need to do this once!*").addActionRow(Button.link("https://www.google.com/device", "Link")).queue();
+					return;
+				}
+			}
+		}
+		
 		// Get member audio channel
 		AudioChannel audioChannel;
 		
@@ -150,7 +174,6 @@ public class AudioHandler {
 		{
 			final String sourceWarning;
 			AudioSource source = desiredSource == null ? DEFAULT : desiredSource;
-			
 			
 			// If we can't process YouTube
 //			if(source == AudioSource.YOUTUBE)

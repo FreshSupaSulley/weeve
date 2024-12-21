@@ -1,9 +1,5 @@
 package com.supasulley.main;
 
-import java.util.function.BiFunction;
-
-import com.google.gson.JsonElement;
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.bandcamp.BandcampAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.soundcloud.SoundCloudAudioSourceManager;
@@ -24,17 +20,12 @@ import dev.lavalink.youtube.clients.TvHtml5Embedded;
 
 public enum AudioSource
 {
-	
 	YOUTUBE("YouTube", YoutubeAudioSourceManager.MUSIC_SEARCH_PREFIX, new YoutubeAudioSourceManager(new TvHtml5Embedded())),
 	SOUNDCLOUD("SoundCloud", "scsearch:", SoundCloudAudioSourceManager.createDefault()),
 	BANDCAMP("Bandcamp", "bcsearch:", new BandcampAudioSourceManager());
-//	SPOTIFY("Spotify", SpotifySourceManager.SEARCH_PREFIX, (json, playerManager) -> new SpotifySourceManager("b8bba9b5d74e4a4e920b2b01f0d0da38", "6027c2ecdb5445aca6d61cea4d0702bd", "US", playerManager, new DefaultMirroringAudioTrackResolver(new String[] {"scsearch:\"" + MirroringAudioSourceManager.ISRC_PATTERN + "\"",
-//										"scsearch:" + MirroringAudioSourceManager.QUERY_PATTERN})));
 	
 	private String fancyName, searchPrefix;
 	private AudioSourceManager manager;
-	
-	private BiFunction<JsonElement, AudioPlayerManager, AudioSourceManager> function;
 	
 	private AudioSource(String fancyName, String searchPrefix, AudioSourceManager manager)
 	{
@@ -43,27 +34,8 @@ public enum AudioSource
 		this.manager = manager;
 	}
 	
-	private AudioSource(String fancyName, String searchPrefix, BiFunction<JsonElement, AudioPlayerManager, AudioSourceManager> function)
+	public AudioSourceManager getManager()
 	{
-		this(fancyName, searchPrefix, (AudioSourceManager) null);
-		
-		this.function = function;
-	}
-	
-	public AudioSourceManager getManager(JsonElement json, AudioPlayerManager playerManager)
-	{
-		if(this == YOUTUBE)
-		{
-			((YoutubeAudioSourceManager) manager).useOauth2(null, false);
-		}
-		
-		// If not created yet
-		if(manager == null)
-		{
-			Main.log.info("Creating AudioSourceManager on {}", this.toString());
-			this.manager = function.apply(json, playerManager);
-		}
-		
 		return manager;
 	}
 	
