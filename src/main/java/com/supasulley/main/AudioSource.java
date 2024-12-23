@@ -1,5 +1,7 @@
 package com.supasulley.main;
 
+import java.util.function.Function;
+
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.soundcloud.SoundCloudAudioSourceManager;
 import com.supasulley.music.CustomYouTubeManager;
@@ -21,19 +23,32 @@ import dev.lavalink.youtube.clients.TvHtml5Embedded;
 public enum AudioSource
 {
 	// Music for searching, TvHtml5Embedded for oauth
-	YOUTUBE("YouTube", CustomYouTubeManager.SEARCH_PREFIX, new CustomYouTubeManager(new Music(), new TvHtml5Embedded())),
+	YOUTUBE("YouTube", CustomYouTubeManager.SEARCH_PREFIX, new CustomYouTubeManager(new Music(), new TvHtml5Embedded()), manager -> manager.canHandle()),
 	SOUNDCLOUD("SoundCloud", "scsearch:", SoundCloudAudioSourceManager.createDefault());
 //	BANDCAMP("Bandcamp", "bcsearch:", new BandcampAudioSourceManager(), BandcampAudioTrack.class);
 	// Bandcamp has a bug where titles can contain HTML character codes and I'm too lazy to fix it rn because who tf uses bandcamp
 	
 	private String fancyName, searchPrefix;
 	private AudioSourceManager manager;
+	private Function<AudioSourceManager, Boolean> canHandle;
 	
-	private AudioSource(String fancyName, String searchPrefix, AudioSourceManager manager)
+	@SuppressWarnings("unchecked")
+	private <T extends AudioSourceManager> AudioSource(String fancyName, String searchPrefix, T manager, Function<T, Boolean> canHandle)
 	{
 		this.fancyName = fancyName;
 		this.searchPrefix = searchPrefix;
 		this.manager = manager;
+		this.canHandle = (Function<AudioSourceManager, Boolean>) canHandle;
+	}
+	
+	private <T extends AudioSourceManager> AudioSource(String fancyName, String searchPrefix, T manager)
+	{
+		this(fancyName, searchPrefix, manager, hi -> true);
+	}
+	
+	public boolean canHandle()
+	{
+		return canHandle.apply(manager);
 	}
 	
 	public AudioSourceManager getManager()

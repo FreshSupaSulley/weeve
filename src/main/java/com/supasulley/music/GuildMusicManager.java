@@ -1,7 +1,6 @@
 package com.supasulley.music;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingDeque;
 
@@ -15,6 +14,8 @@ import com.supasulley.main.Main;
 
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 
 /**
  * Handles all music management for a guild.
@@ -33,7 +34,8 @@ public class GuildMusicManager extends AudioEventAdapter {
 	/** Stores the last channel someone sent a message in */
 	private MessageChannel messageChannel;
 	
-	private Map<String, List<AudioTrack>> requestMap;
+//	private Map<String, List<AudioTrack>> requestMap;
+	private Map<String, Map<String, ButtonAction>> requestMap;
 	
 	public GuildMusicManager(AudioPlayerManager manager)
 	{
@@ -41,7 +43,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 		this.player.addListener(this);
 		this.sendHandler = new AudioPlayerSendHandler(player);
 		this.queue = new LinkedBlockingDeque<AudioRequest>();
-		this.requestMap = new HashMap<String, List<AudioTrack>>();
+		this.requestMap = new HashMap<String, Map<String, ButtonAction>>();
 	}
 	
 	/**
@@ -52,26 +54,27 @@ public class GuildMusicManager extends AudioEventAdapter {
 		return leaveTime;
 	}
 	
-	/**
-	 * Adds an {@linkplain AudioTrack} list representing the options for a play request.
-	 * 
-	 * @param messageID message ID of the selection
-	 * @param track     list of audio track options of this request
-	 */
-	public void addRequest(String messageID, List<AudioTrack> track)
+	public void addButtonAction(Message message, Button button, ButtonAction action)
 	{
-		requestMap.put(messageID, track);
+		if(requestMap.computeIfAbsent(message.getId(), key -> new HashMap<String, ButtonAction>()).put(button.getId(), action) != null)
+		{
+			Main.log.error("Another button action mapping was already made for button ID " + button.getId() + " of " + action);
+		}
 	}
 	
-	/**
-	 * Gets and removes the list of {@linkplain AudioTrack} options associated with this message ID.
-	 * 
-	 * @param messageID message ID of the selection
-	 * @return list of audio track options of this request, or null if the request wasn't found
-	 */
-	public List<AudioTrack> getAudioTrack(String messageID)
+	public void runButtonAction(String messageID, ButtonInteractionEvent event, AudioHandler handler)
 	{
-		return requestMap.remove(messageID);
+		Map<String, ButtonAction> result = requestMap.remove(messageID);
+		
+		if(result == null)
+		{
+			event.deferEdit().setComponents().setContent("This event has expired. Try " + Main.getCommandReference("play") + " again.").queue();
+			return;
+		}
+		
+		ButtonAction action = result.get(event.getButton().getId());
+		action.handle(event, handler);
+		action.fire(event.getHook(), event.getButton(), handler);
 	}
 	
 	@Override

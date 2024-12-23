@@ -50,7 +50,7 @@ public class CustomYouTubeManager extends YoutubeAudioSourceManager {
 		
 		// First check if we are authenticated with YouTube
 		// If we don't have a refresh token yet
-		if(this.getOauth2RefreshToken() == null)
+		if(getOauth2RefreshToken() == null)
 		{
 			// If we never logged in before
 			if(this.userCode == null)
@@ -114,12 +114,20 @@ public class CustomYouTubeManager extends YoutubeAudioSourceManager {
 			}
 			
 			// Check again if we have code
-			if(this.getOauth2RefreshToken() == null)
+			if(getOauth2RefreshToken() == null)
 			{
 				throw new NoCredentialsException((event) -> event.sendMessage("__To start using **YouTube**__:\nLink " + Main.getBotName() + " with a burner Google account. Go to <https://www.google.com/device> and enter code **" + userCode + "**.\n*You only need to do this once!*").addActionRow(Button.link("https://www.google.com/device", "Link")));
 			}
 		}
 		
 		return super.loadItem(manager, reference);
+	}
+	
+	/**
+	 * @return true if YouTube has the appropriate credentials to start handling requests, false otherwise
+	 */
+	public boolean canHandle()
+	{
+		return getOauth2RefreshToken() != null;
 	}
 }

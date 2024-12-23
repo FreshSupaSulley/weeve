@@ -155,7 +155,7 @@ public class InputListener extends ListenerAdapter {
 				
 				if(manager.isConnected())
 				{
-					event.reply("Left **" + MarkdownSanitizer.sanitize(manager.getConnectedChannel().getName()) + "**").queue();
+					event.reply("Left " + MarkdownSanitizer.sanitize(manager.getConnectedChannel().getName())).queue();
 					audioHandler.leaveCall(guild);
 				}
 				else
@@ -325,7 +325,7 @@ public class InputListener extends ListenerAdapter {
 				if(nonBots == 0)
 				{
 					// Leave the call
-					manager.sendToOrigin("All users left **" + MarkdownSanitizer.sanitize(channel.getName()) + "**");
+					manager.sendToOrigin("All users left " + MarkdownSanitizer.sanitize(channel.getName()));
 					audioHandler.leaveCall(guild);
 				}
 			}

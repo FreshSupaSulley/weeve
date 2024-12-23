@@ -4,12 +4,9 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -27,13 +24,16 @@ import com.supasulley.main.Main;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.Interaction;
 import net.dv8tion.jda.api.interactions.InteractionHook;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
+import net.dv8tion.jda.api.requests.restaction.WebhookMessageCreateAction;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.dv8tion.jda.internal.interactions.component.ButtonImpl;
 
@@ -42,11 +42,11 @@ public class AudioHandler {
 	// 1 hour before the bot leaves
 	public static final long IDLE_TIME = 60 * 1000 * 60;
 	
-	private final AudioPlayerManager playerManager;
+	final AudioPlayerManager playerManager;
 	private final Map<Long, GuildMusicManager> musicManagers;
 	
 	/** The default AudioSource. Rotates when one fails */
-	private static AudioSource DEFAULT = AudioSource.SOUNDCLOUD;
+	public static AudioSource DEFAULT = AudioSource.SOUNDCLOUD;
 	
 	public AudioHandler()
 	{
@@ -70,25 +70,6 @@ public class AudioHandler {
 	{
 		AudioSource source = desiredSource == null ? DEFAULT : desiredSource;
 		
-		AtomicBoolean isSearch = new AtomicBoolean(true);
-		String query = event.getOption("query").getAsString();
-		String modifiedQuery = new Function<String, String>()
-		{
-			@Override
-			public String apply(String query)
-			{
-				try {
-					new URI(query).toURL();
-					isSearch.set(false);
-				} catch(Throwable t) {
-					Main.log.info("Processing {} as search query (error was {})", query, t.getMessage());
-					query = source.getSearchPrefix() + query;
-				}
-				
-				return query;
-			}
-		}.apply(query);
-		
 		// Get member audio channel
 		AudioChannel audioChannel;
 		
@@ -102,77 +83,141 @@ public class AudioHandler {
 		// Search for the video
 		event.deferReply(true).queue(hook ->
 		{
-			playerManager.loadItem(modifiedQuery, new AudioLoadResultHandler()
+			// Test if query is a search term
+			boolean isSearch = true;
+			String query = event.getOption("query").getAsString();
+			
+			try {
+				new URI(query).toURL();
+				isSearch = false;
+			} catch(Throwable t) {
+				Main.log.info("Processing {} as search query (error: {})", query, t.getMessage());
+			}
+			
+			searchQuery(hook, getGuildMusicManager(event.getGuild()), isSearch, playNext, query, source, audioChannel);
+		});
+	}
+	
+	/**
+	 * Attempts to find a working alternative source to the provided one. If nothing was found, null is returned.
+	 * 
+	 * @param original source to find an alternative for
+	 * @return an alternative source, or null if none was found
+	 */
+	private AudioSource getAlternativeSource(AudioSource original)
+	{
+		for(AudioSource newSource = original; (newSource = AudioSource.values()[(newSource.ordinal() + 1) % AudioSource.values().length]) != original && newSource.canHandle();)
+		{
+			return newSource;
+		}
+		
+		return null;
+	}
+	
+	public void searchQuery(InteractionHook hook, GuildMusicManager manager, boolean isSearch, boolean playNext, String query, AudioSource source, AudioChannel audioChannel)
+	{
+		AudioHandler handler = this;
+		
+		// Apply source search prefix if query a search
+		playerManager.loadItem((isSearch ? source.getSearchPrefix() : "") + query, new AudioLoadResultHandler()
+		{
+			@Override
+			public void trackLoaded(AudioTrack track)
 			{
-				@Override
-				public void trackLoaded(AudioTrack track)
+				// It's a link, immediately play it
+				Main.log.info("Loaded {}", track.getInfo().uri);
+				// We need to manually delete the hook because we can't spoof a ButtonInteractionEvent
+				hook.deleteOriginal().queue();
+				new TrackSelected(playNext, track, audioChannel).fire(hook, null, handler);
+			}
+			
+			@Override
+			public void playlistLoaded(AudioPlaylist playlist)
+			{
+				// Playlist tracks can apparently be empty on some providers (SoundCloud)
+				if(playlist.getTracks().isEmpty())
 				{
-					Main.log.info("Loaded {}", track.getInfo().uri);
-					// It's a link, immediately play it
-					load(playNext, track.getInfo().uri, audioChannel, hook);
+					noMatches();
+					return;
 				}
 				
-				@Override
-				public void playlistLoaded(AudioPlaylist playlist)
+				// Creates button selections
+				StringBuilder builder = new StringBuilder("**Select a track from " + source.getFancyName() + ":**");
+				ArrayList<Button> buttons = new ArrayList<Button>();
+				
+				for(int i = 0; i < Math.min(playlist.getTracks().size(), 5); i++)
 				{
-					// Playlist tracks can apparently be empty on some providers (SoundCloud)
-					if(playlist.getTracks().isEmpty())
-					{
-						noMatches();
-						return;
-					}
-					
-					StringBuilder builder = new StringBuilder("**Select a track from " + source.getFancyName() + ":**");
-					ArrayList<ButtonImpl> buttons = new ArrayList<ButtonImpl>();
-					
-					for(int i = 0; i < Math.min(playlist.getTracks().size(), 5); i++)
-					{
-						AudioTrackInfo info = playlist.getTracks().get(i).getInfo();
-						buttons.add(new ButtonImpl("" + i, "" + (i + 1), playNext ? ButtonStyle.SECONDARY : ButtonStyle.PRIMARY, false, null));
-						builder.append("\n" + "**" + (i + 1) + ":** " + MarkdownSanitizer.escape(info.title).replaceAll("http[s]?://[^\\s]+", "<$0>") + (info.length != Units.DURATION_MS_UNKNOWN ? " (**" + parseDuration(info.length) + "**)" : ""));
-					}
-					
-					hook.sendMessage(builder.toString()).addActionRow(buttons).setEphemeral(true).onSuccess(message -> {
-						// This only grabs the first 5 from the tracks
-						getGuildMusicManager(event.getGuild()).addRequest(message.getId(), playlist.getTracks().stream().limit(buttons.size()).collect(Collectors.toList()));
-					}).queue();
+					AudioTrackInfo info = playlist.getTracks().get(i).getInfo();
+					buttons.add(new ButtonImpl("" + i, "" + (i + 1), playNext ? ButtonStyle.SECONDARY : ButtonStyle.PRIMARY, false, null));
+					builder.append("\n" + "**" + (i + 1) + ":** " + MarkdownSanitizer.escape(info.title).replaceAll("http[s]?://[^\\s]+", "<$0>") + (info.length != Units.DURATION_MS_UNKNOWN ? " (**" + AudioHandler.parseDuration(info.length) + "**)" : ""));
 				}
 				
-				@Override
-				public void noMatches()
+				attachAlternativeButton(hook.sendMessage(builder.toString()).addActionRow(buttons), message ->
 				{
-					hook.sendMessage("Nothing found by `" + MarkdownSanitizer.sanitize(query) + "`").setEphemeral(true).queue();
+					// This only grabs the first 5 from the tracks
+					for(int i = 0; i < buttons.size(); i++)
+					{
+						manager.addButtonAction(message, buttons.get(i), new TrackSelected(playNext, playlist.getTracks().get(i), audioChannel));
+					}
+				});
+			}
+			
+			@Override
+			public void noMatches()
+			{
+				attachAlternativeButton(hook.sendMessage("Nothing found by `" + MarkdownSanitizer.sanitize(query) + "`"), (message) -> {});
+			}
+			
+			@Override
+			public void loadFailed(FriendlyException exception)
+			{
+				if(exception.getCause() instanceof NoCredentialsException)
+				{
+					((NoCredentialsException) exception.getCause()).fire(hook);
+					return;
 				}
 				
-				@Override
-				public void loadFailed(FriendlyException exception)
+				// Rotate default if this was what was loaded
+				boolean rotated = false;
+				
+				// Only rotate if this wasn't a URL because they might've fucked up copying it
+				if(isSearch && source == AudioHandler.DEFAULT)
 				{
-					if(exception.getCause() instanceof NoCredentialsException)
-					{
-						((NoCredentialsException) exception.getCause()).fire(hook);
-						return;
-					}
-					
-					// Rotate default if this was what was loaded
-					boolean rotated = false;
-					
-					// Only rotate if this wasn't a URL because they might've fucked up copying it
-					if(isSearch.get() && source == DEFAULT)
-					{
-						rotated = true;
-						DEFAULT = AudioSource.values()[(DEFAULT.ordinal() + 1) % AudioSource.values().length];
-						Main.log.warn("Rotated default audio source to {}", DEFAULT);
-					}
-					
-					hook.sendMessage("No audio could be found for `" + MarkdownSanitizer.sanitize(query) + "`" + (rotated ? " (switched default source to **" + DEFAULT.getFancyName() + "**)" : "")).setEphemeral(true).queue();
-					Main.error("Failed to load audio for " + query, exception);
+					rotated = true;
+					AudioHandler.DEFAULT = getAlternativeSource(source);
+					Main.log.warn("Rotated default audio source to {}", AudioHandler.DEFAULT);
 				}
-			});
+				
+				hook.sendMessage("No audio could be found for `" + MarkdownSanitizer.sanitize(query) + "`" + (rotated ? " (switched default source to **" + AudioHandler.DEFAULT.getFancyName() + "**)" : "")).setEphemeral(true).queue();
+				Main.error("Failed to load audio for " + query, exception);
+			}
+			
+			private void attachAlternativeButton(WebhookMessageCreateAction<Message> preMessage, Consumer<? super Message> onSuccess)
+			{
+				// New search request button option
+				AudioSource alternativeSource = getAlternativeSource(source);
+				
+				if(alternativeSource == null)
+				{
+					preMessage.setEphemeral(true).queue(onSuccess);
+					return;
+				}
+				
+				// Otherwise, attach and queue
+				Button switchButton = Button.success(alternativeSource.toString(), "Try " + alternativeSource.getFancyName());
+				preMessage.addActionRow(switchButton).setEphemeral(true).onSuccess(message ->
+				{
+					onSuccess.accept(message);
+					// Now add listener for switch button
+					manager.addButtonAction(message, switchButton, new SearchRequest(isSearch, playNext, query, alternativeSource, audioChannel, manager));
+				}).queue();
+			}
 		});
 	}
 	
 	public void handleButtonPress(ButtonInteractionEvent event)
 	{
+		// Currently, buttons require the user to be in an audio channel
 		AudioChannel audioChannel;
 		
 		try {
@@ -182,21 +227,7 @@ public class AudioHandler {
 			return;
 		}
 		
-		GuildMusicManager musicManager = getGuildMusicManager(audioChannel.getGuild());
-		
-		// Check if the options are still cached
-		List<AudioTrack> selections = musicManager.getAudioTrack(event.getMessageId());
-		
-		if(selections == null)
-		{
-			event.deferEdit().setComponents().setContent("This event has expired. Try " + Main.getCommandReference("play") + " again.").queue();
-			return;
-		}
-		
-		// Delete the select track message
-		event.deferEdit().queue(success -> success.deleteOriginal().queue());
-		load(event.getButton().getStyle() == ButtonStyle.SECONDARY, selections.get(Integer.parseInt(event.getButton().getId())).getInfo().uri, audioChannel, event.getHook());
-//		musicManager.queue(event.getButton().getStyle() == ButtonStyle.SECONDARY, track, event.getChannel());
+		getGuildMusicManager(audioChannel.getGuild()).runButtonAction(event.getMessageId(), event, this);
 	}
 	
 	private AudioChannel getMemberAudioChannel(Interaction event) throws Exception
@@ -224,12 +255,11 @@ public class AudioHandler {
 	 * @param playNext     bump this track to the top of the queue
 	 * @param query        search query or URL
 	 * @param audioChannel {@linkplain AudioChannel} of member who made the request
-	 * @param hook         {@linkplain InteractionHook} for responding
+	 * @param textChannel  {@linkplain MessageChannel} for responding
 	 */
-	private void load(boolean playNext, String query, AudioChannel audioChannel, InteractionHook hook)
+	public void loadAndPlay(boolean playNext, String query, AudioChannel audioChannel, MessageChannel textChannel)
 	{
 		GuildMusicManager musicManager = getGuildMusicManager(audioChannel.getGuild());
-		MessageChannel textChannel = hook.getInteraction().getMessageChannel();
 		
 		playerManager.loadItem(query, new AudioLoadResultHandler()
 		{
@@ -238,11 +268,11 @@ public class AudioHandler {
 			{
 				if(musicManager.isPlaying())
 				{
-					hook.sendMessage(new RequestInfoBuilder().bold().showDuration().showLink().apply(track) + " " + (playNext ? "will play next" : "added to queue")).queue();
+					textChannel.sendMessage(new RequestInfoBuilder().bold().showDuration().showLink().apply(track) + " " + (playNext ? "will play next" : "added to queue")).queue();
 				}
 				else
 				{
-					hook.sendMessage("Now playing " + new RequestInfoBuilder().bold().showDuration().showLink().apply(track)).queue();
+					textChannel.sendMessage("Now playing " + new RequestInfoBuilder().bold().showDuration().showLink().apply(track)).queue();
 				}
 				
 				musicManager.queue(playNext, new AudioRequest(track, audioChannel), textChannel);
@@ -263,11 +293,11 @@ public class AudioHandler {
 				
 				if(musicManager.isPlaying())
 				{
-					hook.sendMessage(new RequestInfoBuilder().bold().showDuration().showLink().apply(firstTrack) + " " + (playNext ? "will play next" : "added to queue") + suffix).queue();
+					textChannel.sendMessage(new RequestInfoBuilder().bold().showDuration().showLink().apply(firstTrack) + " " + (playNext ? "will play next" : "added to queue") + suffix).queue();
 				}
 				else
 				{
-					hook.sendMessage("Now playing " + new RequestInfoBuilder().bold().showDuration().showLink().apply(firstTrack) + suffix).queue();
+					textChannel.sendMessage("Now playing " + new RequestInfoBuilder().bold().showDuration().showLink().apply(firstTrack) + suffix).queue();
 					// No need to flip the order if nothing is playing
 					flipOrder = false;
 				}
@@ -283,13 +313,13 @@ public class AudioHandler {
 			@Override
 			public void noMatches()
 			{
-				hook.sendMessage("Nothing found by `" + query + "`").queue();
+				textChannel.sendMessage("Nothing found by `" + query + "`").queue();
 			}
 			
 			@Override
 			public void loadFailed(FriendlyException exception)
 			{
-				hook.sendMessage("No audio could be found for `" + query + "`").queue();
+				textChannel.sendMessage("No audio could be found for `" + query + "`").queue();
 			}
 		});
 	}
