@@ -205,7 +205,7 @@ public class Main {
 		else
 		{
 			// 100 seconds needs to pass to decrease consecutive errors by 1
-			Main.consecutiveErrors = Math.max(0, Main.consecutiveErrors = (int) (distance / DECREASE_RATE));
+			Main.consecutiveErrors = Math.max(0, Main.consecutiveErrors - (int) (distance / DECREASE_RATE));
 		}
 		
 		// Only DM the user if we're under the max

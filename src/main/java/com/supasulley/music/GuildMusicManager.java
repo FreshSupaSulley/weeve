@@ -358,7 +358,7 @@ public class GuildMusicManager extends AudioEventAdapter {
 	{
 		if(messageChannel != null)
 		{
-			Main.log.error("Sending \"{}\" to voice request origin", message);
+			Main.log.info("Sending \"{}\" to voice request origin", message);
 			messageChannel.sendMessage(message).queue();
 		}
 		else
