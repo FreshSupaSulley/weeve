@@ -4,7 +4,9 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import com.supasulley.music.AudioHandler;
 import com.supasulley.music.GuildMusicManager;
@@ -264,7 +266,9 @@ public class InputListener extends ListenerAdapter {
 	
 	private void handleClearRequest(MessageChannel channel)
 	{
-		channel.getIterableHistory().takeWhileAsync(MAX_CLEARS, rule -> rule.getAuthor().getId().equals(Main.getBotID())).thenAccept(channel::purgeMessages);
+		// This will stop when it encounters the rule (not what I want)
+		// channel.getIterableHistory().takeWhileAsync(MAX_CLEARS, rule -> rule.getAuthor().getId().equals(Main.getBotID())).thenAccept(channel::purgeMessages);
+		channel.getIterableHistory().takeAsync(MAX_CLEARS).thenAccept(messages -> channel.purgeMessages(messages.stream().filter(m -> m.getAuthor().getId().equals(Main.getBotID())).collect(Collectors.toList())));
 	}
 	
 	/**

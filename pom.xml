@@ -92,10 +92,11 @@
 		<!-- 1. Fork youtube-plugin and make your changes -->
 		<!-- 2. Bash head into keyboard figuring out their subprojects layout -->
 		<!-- 3. cd into it, `./gradlew publishToMavenLocal`, then head to ~/.m2 to grab it -->
+		<!-- (for me that's ~/.m2/repository/dev/lavalink/youtube/youtube-plugin/my_hash -->
 		<dependency>
 			<groupId>dev.lavalink.youtube</groupId>
 			<artifactId>youtube-plugin</artifactId>
-			<version>140221ce430f5d72d5b5fe2aee79cab0da8aec65</version>
+			<version>53ffa63f0d4d258a9407876966304cfc2a98089e</version>
 		</dependency>
 		<!-- This is installed automagically with the maven-install-plugin
 		<dependency>
