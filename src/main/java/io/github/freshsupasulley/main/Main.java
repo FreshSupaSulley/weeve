@@ -7,6 +7,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +69,7 @@ public class Main {
 		if(resource.startsWith("jar:") || resource.startsWith("rsrc:"))
 			TEST_BOT = false;
 		
-		log.info("weeve start at {}", System.currentTimeMillis());
+		log.info("weeve start at {}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
 	}
 	
 	/**
