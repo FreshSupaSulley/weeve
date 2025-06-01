@@ -4,6 +4,7 @@ target
 .classpath
 .project
 .settings
+.project
 
 # Contains test tokens (spicy!!)
 gradle.properties
