@@ -1,0 +1,12 @@
+rootProject.name = 'weeve'
+
+includeBuild("yts") {
+    dependencySubstitution {
+        substitute(module("dev.lavalink.youtube:youtube-plugin"))
+            .using(project(":plugin"))
+        substitute(module("dev.lavalink.youtube:common"))
+            .using(project(":common"))
+        substitute(module("dev.lavalink.youtube:v2"))
+            .using(project(":v2"))
+    }
+}

@@ -1,4 +1,4 @@
-package com.supasulley.main;
+package io.github.freshsupasulley.main;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -26,6 +26,7 @@ import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Activity.ActivityType;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
+import net.dv8tion.jda.api.interactions.InteractionContextType;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.Command.Subcommand;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
@@ -258,15 +259,15 @@ public class Main {
 		// Public slash commands
 		CommandData[] commands = new CommandData [] {
 			// Public
-			Commands.slash("play", "Play a song").addOption(OptionType.STRING, "query", "Search term or link", true).addOptions(source).addOption(OptionType.BOOLEAN, "next", "Plays this track next").setGuildOnly(true),
+			Commands.slash("play", "Play a song").addOption(OptionType.STRING, "query", "Search term or link", true).addOptions(source).addOption(OptionType.BOOLEAN, "next", "Plays this track next").setContexts(InteractionContextType.GUILD),
 //			Commands.slash("ytcookies", "Supply YouTube cookies").addOption(OptionType.STRING, "cookies", "Exported YouTube cookies", true).setGuildOnly(true),
 //			Commands.slash("next", "Forces a song to play next").addOptions(songRequest).setGuildOnly(true),
-			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)).setGuildOnly(true),
-			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)).setGuildOnly(true),
-			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)).setGuildOnly(true),
-			Commands.slash("queue", "See queued songs").setGuildOnly(true),
-			Commands.slash("stop", "Stops playback").setGuildOnly(true),
-			Commands.slash("leave", "Leaves the call").setGuildOnly(true),
+			Commands.slash("skip", "Skip the song").addOptions(new OptionData(OptionType.INTEGER, "amount", "Number of songs to skip").setRequiredRange(1, 250)).setContexts(InteractionContextType.GUILD),
+			Commands.slash("forward", "Fast-forward the song").addOptions(new OptionData(OptionType.INTEGER, "hours", "Number of hours to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "minutes", "Number of minutes to skip", false).setMinValue(1), new OptionData(OptionType.INTEGER, "seconds", "Number of seconds to skip", false).setMinValue(1)).setContexts(InteractionContextType.GUILD),
+			Commands.slash("loop", "Control looping").addOptions(new OptionData(OptionType.BOOLEAN, "loop", "Whether to turn looping on or off", true)).setContexts(InteractionContextType.GUILD),
+			Commands.slash("queue", "See queued songs").setContexts(InteractionContextType.GUILD),
+			Commands.slash("stop", "Stops playback").setContexts(InteractionContextType.GUILD),
+			Commands.slash("leave", "Leaves the call").setContexts(InteractionContextType.GUILD),
 			
 			// Public and private
 			Commands.slash("clean-up", "Deletes commands")

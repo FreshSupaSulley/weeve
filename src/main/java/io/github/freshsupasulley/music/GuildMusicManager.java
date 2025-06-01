@@ -1,4 +1,4 @@
-package com.supasulley.music;
+package io.github.freshsupasulley.music;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,8 +10,8 @@ import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
-import com.supasulley.main.Main;
 
+import io.github.freshsupasulley.main.Main;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;

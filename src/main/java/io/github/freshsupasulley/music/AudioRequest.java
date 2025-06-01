@@ -1,4 +1,4 @@
-package com.supasulley.music;
+package io.github.freshsupasulley.music;
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 

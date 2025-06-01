@@ -1,4 +1,15 @@
 **/.DS_Store
+bin
 target
-logs
-tokens.json
+.classpath
+.project
+.settings
+
+# Contains test tokens (spicy!!)
+gradle.properties
+
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build

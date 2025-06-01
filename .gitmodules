@@ -1,0 +1,3 @@
+[submodule "yts"]
+	path = yts
+	url = https://github.com/FreshSupaSulley/youtube-source.git

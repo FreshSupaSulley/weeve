@@ -1,0 +1,65 @@
+plugins {
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("dev.lavalink.youtube:youtube-plugin:1.0.0-patch") // manually specify the patch we're doing in our fork
+	implementation("dev.lavalink.youtube:common:+")
+	implementation("dev.lavalink.youtube:v2:+")
+	
+	implementation 'com.grack:nanojson:1.7'
+    
+    // https://mvnrepository.com/artifact/net.dv8tion/JDA
+	implementation 'net.dv8tion:JDA:5.5.1'
+    // https://mvnrepository.com/artifact/org.slf4j/slf4j-api
+	implementation 'org.slf4j:slf4j-api:2.0.17'
+	// https://mvnrepository.com/artifact/dev.arbjerg/lavaplayer
+	implementation 'dev.arbjerg:lavaplayer:2.2.3'
+	// https://mvnrepository.com/artifact/com.google.code.gson/gson
+	implementation 'com.google.code.gson:gson:2.13.1'
+	
+	// https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
+	testImplementation 'org.slf4j:slf4j-simple:2.0.17'
+}
+
+application {
+    // Define the main class for the application.
+    mainClass = 'io.github.freshsupasulley.main.Main'
+}
+
+run {
+    args = ["--token=" + project.property("token"), "--test_token=" + project.property("test_token"), "--owner_id=" + project.property("owner_id"), "--notify_errors"]
+}
+
+test {
+    testLogging.showStandardStreams = true
+}
+
+shadowJar {
+	archiveClassifier.set('')
+    manifest {
+        attributes(
+            'Main-Class': application.mainClass.get()
+        )
+    }
+}
+
+tasks.named("distZip") {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.named("distTar") {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.named("startScripts") {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.jar.enabled = false
+tasks.build.dependsOn tasks.shadowJar

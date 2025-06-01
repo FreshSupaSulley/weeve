@@ -1,4 +1,4 @@
-package com.supasulley.main;
+package io.github.freshsupasulley.main;
 
 import java.util.function.Function;
 

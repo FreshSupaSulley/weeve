@@ -1,4 +1,4 @@
-package com.supasulley.music;
+package io.github.freshsupasulley.music;
 
 import java.nio.ByteBuffer;
 

@@ -1,13 +1,13 @@
-package com.supasulley.main;
+package io.github.freshsupasulley.main;
 
 import java.util.function.Function;
 
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.soundcloud.SoundCloudAudioSourceManager;
-import com.supasulley.music.CustomYouTubeManager;
 
 import dev.lavalink.youtube.clients.Music;
 import dev.lavalink.youtube.clients.TvHtml5Embedded;
+import io.github.freshsupasulley.music.CustomYouTubeManager;
 
 // playerManager.registerSourceManager(new YoutubeAudioSourceManager(true, null, null));
 // playerManager.registerSourceManager(new YandexMusicAudioSourceManager(true));

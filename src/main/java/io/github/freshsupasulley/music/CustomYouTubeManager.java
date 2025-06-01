@@ -1,4 +1,4 @@
-package com.supasulley.music;
+package io.github.freshsupasulley.music;
 
 import java.io.IOException;
 
@@ -12,11 +12,11 @@ import com.sedmelluq.discord.lavaplayer.tools.ExceptionTools;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterface;
 import com.sedmelluq.discord.lavaplayer.track.AudioItem;
 import com.sedmelluq.discord.lavaplayer.track.AudioReference;
-import com.supasulley.main.Main;
 
 import dev.lavalink.youtube.YoutubeAudioSourceManager;
 import dev.lavalink.youtube.clients.skeleton.Client;
 import dev.lavalink.youtube.http.RefreshTokenQueryResponse;
+import io.github.freshsupasulley.main.Main;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 
 public class CustomYouTubeManager extends YoutubeAudioSourceManager {

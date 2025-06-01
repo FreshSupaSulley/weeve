@@ -1,7 +1,6 @@
-package com.supasulley.music;
+package io.github.freshsupasulley.music;
 
-import com.supasulley.main.AudioSource;
-
+import io.github.freshsupasulley.main.AudioSource;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;

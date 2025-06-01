@@ -1,4 +1,4 @@
-package com.supasulley.main;
+package io.github.freshsupasulley.main;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -7,9 +7,8 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import com.supasulley.music.AudioHandler;
-import com.supasulley.music.GuildMusicManager;
-
+import io.github.freshsupasulley.music.AudioHandler;
+import io.github.freshsupasulley.music.GuildMusicManager;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
