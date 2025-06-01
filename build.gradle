@@ -7,6 +7,12 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
 dependencies {
     implementation("dev.lavalink.youtube:youtube-plugin:1.0.0-patch") // manually specify the patch we're doing in our fork
 	implementation("dev.lavalink.youtube:common:+")
