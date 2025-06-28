@@ -39,7 +39,9 @@ application {
 }
 
 run {
-    args = ["--token=" + project.property("token"), "--test_token=" + project.property("test_token"), "--owner_id=" + project.property("owner_id"), "--notify_errors"]
+	doFirst {
+    	args = ["--token=" + project.property("token"), "--test_token=" + project.property("test_token"), "--owner_id=" + project.property("owner_id"), "--notify_errors"]
+    }
 }
 
 test {
