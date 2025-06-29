@@ -1,4 +1,4 @@
-package io.github.freshsupasulley.main;
+package io.github.freshsupasulley.weeve;
 
 import java.util.function.Function;
 
@@ -7,7 +7,7 @@ import com.sedmelluq.discord.lavaplayer.source.soundcloud.SoundCloudAudioSourceM
 
 import dev.lavalink.youtube.clients.Music;
 import dev.lavalink.youtube.clients.TvHtml5Embedded;
-import io.github.freshsupasulley.music.CustomYouTubeManager;
+import io.github.freshsupasulley.weeve.music.CustomYouTubeManager;
 
 // playerManager.registerSourceManager(new YoutubeAudioSourceManager(true, null, null));
 // playerManager.registerSourceManager(new YandexMusicAudioSourceManager(true));

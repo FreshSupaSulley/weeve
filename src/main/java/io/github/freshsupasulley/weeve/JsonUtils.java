@@ -1,4 +1,4 @@
-package io.github.freshsupasulley.main;
+package io.github.freshsupasulley.weeve;
 
 import java.util.function.Function;
 

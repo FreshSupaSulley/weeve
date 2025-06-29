@@ -1,4 +1,4 @@
-package io.github.freshsupasulley.music;
+package io.github.freshsupasulley.weeve.music;
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;

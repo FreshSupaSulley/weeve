@@ -1,4 +1,4 @@
-package io.github.freshsupasulley.music;
+package io.github.freshsupasulley.weeve.music;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -19,8 +19,8 @@ import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 
-import io.github.freshsupasulley.main.AudioSource;
-import io.github.freshsupasulley.main.Main;
+import io.github.freshsupasulley.weeve.AudioSource;
+import io.github.freshsupasulley.weeve.Main;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;

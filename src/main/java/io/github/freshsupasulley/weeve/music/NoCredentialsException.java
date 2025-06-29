@@ -1,4 +1,4 @@
-package io.github.freshsupasulley.music;
+package io.github.freshsupasulley.weeve.music;
 
 import java.util.function.Function;
 

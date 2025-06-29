@@ -1,4 +1,4 @@
-package io.github.freshsupasulley.music;
+package io.github.freshsupasulley.weeve.music;
 
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;

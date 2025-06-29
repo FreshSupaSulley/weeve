@@ -1,6 +1,6 @@
-package io.github.freshsupasulley.music;
+package io.github.freshsupasulley.weeve.music;
 
-import io.github.freshsupasulley.main.AudioSource;
+import io.github.freshsupasulley.weeve.AudioSource;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
